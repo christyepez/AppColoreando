@@ -2,17 +2,13 @@ name: Backend CI
 
 on:
   push:
-    branches: [ main, develop/baseline-platform ]
-    paths:
-      - 'backend/**'
-      - '.github/workflows/backend-ci.yml'
+    branches: [ main, 'sprints/**' ]
+    paths: [ 'backend/**', '.github/workflows/backend-ci.yml' ]
   pull_request:
-    paths:
-      - 'backend/**'
-      - '.github/workflows/backend-ci.yml'
+    paths: [ 'backend/**', '.github/workflows/backend-ci.yml' ]
 
 jobs:
-  build:
+  build-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,6 +16,8 @@ jobs:
         with:
           dotnet-version: '10.0.x'
       - name: Restore
-        run: dotnet restore backend/src/AppColoreando.Api/AppColoreando.Api.csproj
+        run: dotnet restore backend/AppColoreando.slnx
       - name: Build
-        run: dotnet build backend/src/AppColoreando.Api/AppColoreando.Api.csproj -c Release --no-restore --warnaserror
+        run: dotnet build backend/AppColoreando.slnx -c Release --no-restore --warnaserror
+      - name: Test
+        run: dotnet test backend/AppColoreando.slnx -c Release --no-build --logger trx

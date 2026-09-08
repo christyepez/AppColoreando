@@ -1,0 +1,10 @@
+﻿**/bin/
+**/obj/
+**/node_modules/
+.env
+.dart_tool/
+.flutter-plugins*
+.idea/
+.vscode/
+*.user
+*.suo

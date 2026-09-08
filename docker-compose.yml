@@ -5,10 +5,8 @@ services:
       POSTGRES_DB: appcoloreando
       POSTGRES_USER: appcoloreando
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+    ports: ["5432:5432"]
+    volumes: [postgres_data:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U appcoloreando -d appcoloreando"]
       interval: 10s
@@ -17,8 +15,23 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    ports: ["6379:6379"]
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    ports: ["5672:5672", "15672:15672"]
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-appcoloreando}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-appcoloreando}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports: ["9000:9000", "9001:9001"]
+    volumes: [minio_data:/data]
 
   api:
     build:
@@ -32,8 +45,7 @@ services:
       Jwt__Issuer: AppColoreando
       Jwt__Audience: AppColoreando.MobileAdmin
       Cors__AllowedOrigins__0: http://localhost:4200
-    ports:
-      - "8080:8080"
+    ports: ["8080:8080"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,13 +55,11 @@ services:
   admin:
     image: node:22-alpine
     working_dir: /app
-    command: sh -c "npm install && npm start -- --host 0.0.0.0"
-    volumes:
-      - ./apps/admin:/app
-    ports:
-      - "4200:4200"
-    depends_on:
-      - api
+    command: sh -c "npm ci && npm start -- --host 0.0.0.0"
+    volumes: [./apps/admin:/app]
+    ports: ["4200:4200"]
+    depends_on: [api]
 
 volumes:
   postgres_data:
+  minio_data:
