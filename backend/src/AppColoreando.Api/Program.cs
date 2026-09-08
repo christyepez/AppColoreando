@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
+using Prometheus;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -86,11 +87,13 @@ app.Use(async (context, next) =>
     await next();
 });
 app.UseCors();
+app.UseHttpMetrics();
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHealthChecks("/health");
+app.MapMetrics("/metrics");
 await app.InitializeDatabaseAsync();
 
 app.Run();

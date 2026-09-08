@@ -1,14 +1,20 @@
-name: Backend CI
+name: AppColoreando CI
 
 on:
   push:
-    branches: [ main, 'sprints/**' ]
-    paths: [ 'backend/**', '.github/workflows/backend-ci.yml' ]
+    branches: [ main, develop/baseline-platform, 'sprints/**' ]
+    paths:
+      - 'backend/**'
+      - 'apps/admin/**'
+      - '.github/workflows/backend-ci.yml'
   pull_request:
-    paths: [ 'backend/**', '.github/workflows/backend-ci.yml' ]
+    paths:
+      - 'backend/**'
+      - 'apps/admin/**'
+      - '.github/workflows/backend-ci.yml'
 
 jobs:
-  build-test:
+  backend:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,4 +26,20 @@ jobs:
       - name: Build
         run: dotnet build backend/AppColoreando.slnx -c Release --no-restore --warnaserror
       - name: Test
-        run: dotnet test backend/AppColoreando.slnx -c Release --no-build --logger trx
+        run: dotnet test backend/AppColoreando.slnx -c Release --no-build
+
+  admin:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: apps/admin/package-lock.json
+      - name: Install
+        working-directory: apps/admin
+        run: npm ci
+      - name: Build
+        working-directory: apps/admin
+        run: npm run build
