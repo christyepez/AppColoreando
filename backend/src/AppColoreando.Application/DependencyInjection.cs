@@ -9,9 +9,11 @@ public static class DependencyInjection
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
         services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IUserAccountService, UserAccountService>();
         services.AddScoped<ICatalogService, CatalogService>();
         services.AddScoped<IUserContentService, UserContentService>();
         services.AddScoped<IAdminService, AdminService>();
+        services.AddScoped<IArtworkBundleProcessor, ArtworkBundleProcessor>();
         return services;
     }
 }

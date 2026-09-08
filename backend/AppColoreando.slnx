@@ -4,10 +4,12 @@
     <Project Path="src/AppColoreando.Application/AppColoreando.Application.csproj" />
     <Project Path="src/AppColoreando.Domain/AppColoreando.Domain.csproj" />
     <Project Path="src/AppColoreando.Infrastructure/AppColoreando.Infrastructure.csproj" />
+    <Project Path="src/AppColoreando.Worker/AppColoreando.Worker.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AppColoreando.Application.UnitTests/AppColoreando.Application.UnitTests.csproj" />
     <Project Path="tests/AppColoreando.ArchitectureTests/AppColoreando.ArchitectureTests.csproj" />
     <Project Path="tests/AppColoreando.Domain.UnitTests/AppColoreando.Domain.UnitTests.csproj" />
+    <Project Path="tests/AppColoreando.IntegrationTests/AppColoreando.IntegrationTests.csproj" />
   </Folder>
 </Solution>

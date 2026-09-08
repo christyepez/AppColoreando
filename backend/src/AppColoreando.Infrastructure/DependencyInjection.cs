@@ -19,9 +19,17 @@ public static class DependencyInjection
         services.AddDbContext<AppDbContext>(options => options.UseNpgsql(connectionString));
         services.AddScoped<IUnitOfWork>(sp => sp.GetRequiredService<AppDbContext>());
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<IUserProfileRepository, UserProfileRepository>();
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IArtworkRepository, ArtworkRepository>();
         services.AddScoped<ICategoryRepository, CategoryRepository>();
+        services.AddScoped<ICountryRepository, CountryRepository>();
+        services.AddScoped<IBrandRepository, BrandRepository>();
+        services.AddScoped<ILicenseRepository, LicenseRepository>();
+        services.AddScoped<ICollectionRepository, CollectionRepository>();
         services.AddScoped<IUserProgressRepository, UserProgressRepository>();
+        services.AddScoped<ISyncOperationRepository, SyncOperationRepository>();
+        services.AddScoped<IUserAchievementRepository, UserAchievementRepository>();
         services.AddScoped<IUserActivityRepository, UserActivityRepository>();
         services.AddScoped<IUserMetricRepository, UserMetricRepository>();
         services.AddScoped<IAuditRepository, AuditRepository>();
