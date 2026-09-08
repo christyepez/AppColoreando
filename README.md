@@ -45,3 +45,12 @@ Servicios previstos:
 - MinIO: `http://localhost:9001`
 
 > Las franquicias comerciales (Disney, Pixar, Paw Patrol, Bluey, Dragon Ball, Saint Seiya, Transformers, He-Man, etc.) deben cargarse únicamente cuando existan los derechos/licencias correspondientes. La plataforma modela esos derechos desde el inicio.
+
+## Release and validation
+
+- Sprint implementation status: `docs/sprint-status.md`
+- Release readiness: `docs/release-readiness.md`
+- Store checklist: `docs/store-release-checklist.md`
+- Latest validation evidence: `docs/release-validation-2026-09-08.md`
+
+The repository is release-ready at source/CI level. Native store artifacts remain gated by Android SDK/production signing and macOS/Xcode/Apple signing prerequisites documented above.

@@ -1,0 +1,42 @@
+name: Mobile CI
+
+on:
+  push:
+    branches: [ main, 'sprints/**' ]
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/mobile-ci.yml'
+  pull_request:
+    paths:
+      - 'apps/mobile/**'
+      - '.github/workflows/mobile-ci.yml'
+
+jobs:
+  flutter-quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version: '3.47.2'
+          cache: true
+      - name: Dependencies
+        working-directory: apps/mobile
+        run: flutter pub get
+      - name: Analyze
+        working-directory: apps/mobile
+        run: flutter analyze
+      - name: Test
+        working-directory: apps/mobile
+        run: flutter test
+      - name: Release identity guardrail
+        shell: bash
+        run: |
+          grep -q 'applicationId = "com.appcoloreando.mobile"' apps/mobile/android/app/build.gradle.kts
+          grep -q 'namespace = "com.appcoloreando.mobile"' apps/mobile/android/app/build.gradle.kts
+          grep -q 'PRODUCT_BUNDLE_IDENTIFIER = com.appcoloreando.mobile;' apps/mobile/ios/Runner.xcodeproj/project.pbxproj
+          if grep -q 'signingConfigs.getByName("debug")' apps/mobile/android/app/build.gradle.kts; then
+            echo 'Release build must not use debug signing.'
+            exit 1
+          fi

@@ -1,38 +1,39 @@
 # Release Readiness
 
-## Local Ports
+## Local service endpoints
 
 - API: `http://localhost:8080`
 - Swagger: `http://localhost:8080/swagger`
 - Health: `http://localhost:8080/health`
+- Prometheus metrics: `http://localhost:8080/metrics`
 - Admin: `http://localhost:4200`
 - PostgreSQL: `localhost:5432`
 - RabbitMQ management: `http://localhost:15672`
 - MinIO console: `http://localhost:9001`
+- Prometheus: `http://localhost:9090`
+- Grafana: `http://localhost:3000`
 
-## Credentials
+## Mobile release identity
 
-Create `.env` from `.env.example` and set strong local values. Demo admin creation is opt-in through:
+- Product: `AppColoreando`
+- Version: `1.0.0+1`
+- Android application ID: `com.appcoloreando.mobile`
+- iOS bundle ID: `com.appcoloreando.mobile`
+- Android release build no longer falls back to the debug signing key.
 
-```text
-SEED__ADMINEMAIL=admin@appcoloreando.local
-SEED__ADMINPASSWORD=<local strong password>
-JWT_KEY=<at least 32 random characters>
-```
+## Current validation environment
 
-## Store Placeholders
+Validated on Windows with Flutter `3.47.2`, Dart `3.13.2` and .NET `10`.
 
-Android package ID: `com.appcoloreando.mobile`
+Known external blockers on this workstation:
 
-iOS bundle ID: `com.appcoloreando.mobile`
+- Android SDK is not installed, so APK/AAB generation cannot be truthfully marked as executed here.
+- iOS archive/signing requires macOS, Xcode and Apple signing credentials.
+- Google Play and App Store production signing credentials are intentionally not stored in the repository.
+- Flutter doctor also reports a Windows desktop Visual Studio detection issue caused by the missing `%PROGRAMFILES(X86)%` environment variable; Windows desktop is not a release target for this project.
 
-Signing, Apple Developer, Google Play Console, privacy policy publication and licensed IP rights are external prerequisites.
+## Required secret handling
 
-## QA Smoke Test
+Create `.env` from `.env.example` and use strong local values. Production values belong in the target secret store/CI environment, never Git.
 
-1. Run `docker compose --env-file .env up --build`.
-2. Open `http://localhost:8080/health`.
-3. Open Swagger and authenticate through `/api/auth/login`.
-4. Open `http://localhost:4200`, sign in with the seeded admin, inspect dashboard/users/content/audit.
-5. Install Flutter locally, then run `flutter create . --platforms android,ios` inside `apps/mobile` if native folders are needed, followed by `flutter pub get`, `flutter analyze`, and `flutter test`.
-
+Required runtime secrets include PostgreSQL password, JWT signing key, RabbitMQ password, MinIO credentials and any opt-in seed administrator password.

@@ -43,3 +43,6 @@ jobs:
       - name: Build
         working-directory: apps/admin
         run: npm run build
+      - name: Production dependency audit
+        working-directory: apps/admin
+        run: npm audit --omit=dev --audit-level=moderate
