@@ -7,6 +7,7 @@
 - Health: `http://localhost:8080/health`
 - Prometheus metrics: `http://localhost:8080/metrics`
 - Admin: `http://localhost:4200`
+- User Web/PWA: `http://localhost:8083`
 - PostgreSQL: `localhost:5432`
 - RabbitMQ management: `http://localhost:15672`
 - MinIO console: `http://localhost:9001`
@@ -19,18 +20,26 @@
 - Version: `1.0.0+1`
 - Android application ID: `com.appcoloreando.mobile`
 - iOS bundle ID: `com.appcoloreando.mobile`
-- Android release build no longer falls back to the debug signing key.
+- Android release build never falls back to the debug signing key.
 
 ## Current validation environment
 
-Validated on Windows with Flutter `3.47.2`, Dart `3.13.2` and .NET `10`.
+Validated on Windows with Flutter `3.47.2`, Dart `3.13.2`, .NET `10`, Android SDK 36 and NDK `28.2.13676358`.
 
-Known external blockers on this workstation:
+Validated locally:
 
-- Android SDK is not installed, so APK/AAB generation cannot be truthfully marked as executed here.
-- iOS archive/signing requires macOS, Xcode and Apple signing credentials.
+- Android 16 / API 36 `medium_phone` AVD created and detected by Flutter.
+- Debug APK built, installed and launched successfully on `emulator-5554`.
+- Android release AAB compilation passed; `app-release.aab` generated at 49.1 MB.
+- `MainActivity` remained foreground with no fatal Android runtime exception.
+- Flutter Web Release build completed successfully.
+- Web/PWA and Android use the same Flutter codebase with environment-specific API endpoints.
+
+Remaining external blockers:
+
+- iOS archive/signing requires supported macOS, Xcode and Apple signing credentials.
 - Google Play and App Store production signing credentials are intentionally not stored in the repository.
-- Flutter doctor also reports a Windows desktop Visual Studio detection issue caused by the missing `%PROGRAMFILES(X86)%` environment variable; Windows desktop is not a release target for this project.
+- Windows native `.exe` requires Windows Developer Mode and the Visual Studio Desktop development with C++ workload on this workstation.
 
 ## Required secret handling
 

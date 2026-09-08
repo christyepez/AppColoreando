@@ -38,6 +38,7 @@ jobs:
         with:
           name: appcoloreando-web
           path: apps/mobile/build/web
+          retention-days: 7
       - name: Release identity guardrail
         shell: bash
         run: |
