@@ -1,3 +1,4 @@
+﻿import 'package:app_coloreando/src/catalog/catalog_repository.dart';
 import 'package:app_coloreando/src/catalog/demo_artwork.dart';
 import 'package:app_coloreando/src/coloring/coloring_page.dart';
 import 'package:app_coloreando/src/config/app_config.dart';
@@ -120,8 +121,30 @@ class HomePage extends ConsumerWidget {
   }
 }
 
-class CatalogPage extends StatelessWidget {
+class CatalogPage extends ConsumerStatefulWidget {
   const CatalogPage({super.key});
+
+  @override
+  ConsumerState<CatalogPage> createState() => _CatalogPageState();
+}
+
+class _CatalogPageState extends ConsumerState<CatalogPage> {
+  final searchController = TextEditingController();
+  String? countryCode;
+  int? difficulty;
+  late Future<CatalogPageResult> future;
+
+  @override
+  void initState() {
+    super.initState();
+    future = _load();
+  }
+
+  Future<CatalogPageResult> _load() => ref.read(catalogRepositoryProvider).search(
+        CatalogFilter(search: searchController.text, countryCode: countryCode, difficulty: difficulty),
+      );
+
+  void refresh() => setState(() => future = _load());
 
   @override
   Widget build(BuildContext context) {
@@ -130,15 +153,23 @@ class CatalogPage extends StatelessWidget {
       children: [
         Text('Catalogo', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
         const SizedBox(height: 12),
-        TextField(
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.search),
-            hintText: 'Buscar dibujos',
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-        ),
+        TextField(controller: searchController, onSubmitted: (_) => refresh(), decoration: InputDecoration(prefixIcon: const Icon(Icons.search), hintText: 'Buscar dibujos', border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)))),
+        const SizedBox(height: 12),
+        Wrap(spacing: 8, children: [
+          DropdownButton<String?>(value: countryCode, hint: const Text('Pais'), items: const [DropdownMenuItem(value: null, child: Text('Todos')), DropdownMenuItem(value: 'EC', child: Text('Ecuador')), DropdownMenuItem(value: 'CO', child: Text('Colombia')), DropdownMenuItem(value: 'US', child: Text('USA'))], onChanged: (v) { countryCode = v; refresh(); }),
+          DropdownButton<int?>(value: difficulty, hint: const Text('Dificultad'), items: const [DropdownMenuItem(value: null, child: Text('Todas')), DropdownMenuItem(value: 1, child: Text('1')), DropdownMenuItem(value: 2, child: Text('2')), DropdownMenuItem(value: 3, child: Text('3')), DropdownMenuItem(value: 4, child: Text('4')), DropdownMenuItem(value: 5, child: Text('5'))], onChanged: (v) { difficulty = v; refresh(); }),
+        ]),
         const SizedBox(height: 16),
-        const _DemoArtworkCard(),
+        FutureBuilder<CatalogPageResult>(
+          future: future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+            if (snapshot.hasError) return const Column(children: [Text('Catalogo remoto no disponible. Mostrando contenido local.'), SizedBox(height: 12), _DemoArtworkCard()]);
+            final items = snapshot.data?.items ?? const <CatalogArtwork>[];
+            if (items.isEmpty) return const Text('No hay dibujos para estos filtros.');
+            return Column(children: [for (final item in items) Card(child: ListTile(title: Text(item.title), subtitle: Text('${item.countryCode ?? '-'} · dificultad ${item.difficulty} · ${item.regionCount} regiones'), trailing: const Icon(Icons.chevron_right)))]);
+          },
+        ),
       ],
     );
   }
@@ -219,3 +250,4 @@ class _DemoArtworkCard extends StatelessWidget {
     );
   }
 }
+
