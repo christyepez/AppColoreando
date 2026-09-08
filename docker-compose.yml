@@ -22,11 +22,16 @@ services:
 
   api:
     build:
-      context: ./backend/src/AppColoreando.Api
+      context: ./backend
+      dockerfile: src/AppColoreando.Api/Dockerfile
     environment:
       ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=appcoloreando;Username=appcoloreando;Password=${POSTGRES_PASSWORD}
       Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: AppColoreando
+      Jwt__Audience: AppColoreando.MobileAdmin
+      Cors__AllowedOrigins__0: http://localhost:4200
     ports:
       - "8080:8080"
     depends_on:
@@ -38,7 +43,7 @@ services:
   admin:
     image: node:22-alpine
     working_dir: /app
-    command: sh -c "npm install && npm start"
+    command: sh -c "npm install && npm start -- --host 0.0.0.0"
     volumes:
       - ./apps/admin:/app
     ports:
