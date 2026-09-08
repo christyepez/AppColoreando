@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using AppColoreando.Application.Abstractions;
 using AppColoreando.Application.Contracts;
 using AppColoreando.Domain.Entities;
@@ -242,8 +242,13 @@ public sealed class UserContentService(
 
     private async Task AwardAchievements(Guid userId, bool completedNow, int regions, CancellationToken ct)
     {
-        if (regions > 0 && !await achievements.ExistsAsync(userId, "first-color", ct)) achievements.Add(new UserAchievement { UserId = userId, Code = "first-color", Name = "First Color", XpAwarded = 25 });
-        if (completedNow && !await achievements.ExistsAsync(userId, "first-artwork", ct)) achievements.Add(new UserAchievement { UserId = userId, Code = "first-artwork", Name = "First Artwork", XpAwarded = 100 });
+        foreach (var rule in GamificationRules.Evaluate(completedNow, regions))
+        {
+            if (!await achievements.ExistsAsync(userId, rule.Code, ct))
+            {
+                achievements.Add(new UserAchievement { UserId = userId, Code = rule.Code, Name = rule.Name, XpAwarded = rule.XpAwarded });
+            }
+        }
     }
 
     private static ProgressDto Map(UserArtworkProgress x)
