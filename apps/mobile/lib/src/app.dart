@@ -1,4 +1,5 @@
 import 'package:app_coloreando/src/catalog/demo_artwork.dart';
+import 'package:app_coloreando/src/coloring/coloring_page.dart';
 import 'package:app_coloreando/src/config/app_config.dart';
 import 'package:app_coloreando/src/l10n/app_strings.dart';
 import 'package:app_coloreando/src/theme/app_theme.dart';
@@ -21,6 +22,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/settings', builder: (_, __) => const SettingsPage()),
         ],
       ),
+      GoRoute(path: '/color/:id', builder: (_, state) => ColoringPage(artworkId: state.pathParameters['id']!)),
     ],
   );
 });
@@ -191,11 +193,11 @@ class _DemoArtworkCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final artwork = demoArtwork;
+    final artwork = demoArtworks.first;
     return Card(
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () {},
+        onTap: () => context.push('/color/${artwork.id}'),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
