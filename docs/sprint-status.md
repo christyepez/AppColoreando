@@ -17,3 +17,4 @@
 | S12 | Completed | Refresh-token rotation/replay/device-mismatch hardening and security tests. |
 | S13 | Completed | Prometheus metrics, `/metrics`, unified backend/admin CI and observability stack. |
 | S14 | Release-ready with external distribution blockers | IDs/version/signing guardrails/store checklist/mobile CI complete. Android SDK and Apple/Google production signing remain external prerequisites. |
+| S15 | Completed | Flutter Web/Windows targets, Android 16/API 36 emulator, automated PC simulation scripts, Web CI artifact and Android smoke test passed. |

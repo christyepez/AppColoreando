@@ -49,6 +49,7 @@ services:
       Seed__AdminEmail: ${SEED__ADMINEMAIL:-}
       Seed__AdminPassword: ${SEED__ADMINPASSWORD:-}
       Cors__AllowedOrigins__0: http://localhost:4200
+      Cors__AllowedOrigins__1: http://localhost:8083
     ports: ["8080:8080"]
     depends_on:
       postgres:
@@ -76,6 +77,14 @@ services:
     ports: ["4200:4200"]
     depends_on: [api]
 
+  webapp:
+    image: nginx:1.27-alpine
+    profiles: ["web"]
+    volumes:
+      - ./apps/mobile/build/web:/usr/share/nginx/html:ro
+      - ./infrastructure/nginx/appcoloreando-web.conf:/etc/nginx/conf.d/default.conf:ro
+    ports: ["8083:80"]
+    depends_on: [api]
   prometheus:
     image: prom/prometheus:latest
     volumes:
