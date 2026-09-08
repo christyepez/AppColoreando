@@ -47,7 +47,24 @@ public sealed class AuthService(
     {
         var tokenHash = tokens.HashRefreshToken(request.RefreshToken);
         var existing = await refreshTokens.GetByHashAsync(tokenHash, ct);
-        if (existing is null || !existing.IsActive || !StringComparer.Ordinal.Equals(existing.DeviceId, request.DeviceId)) return null;
+        if (existing is null) return null;
+
+        if (!existing.IsActive)
+        {
+            if (!string.IsNullOrWhiteSpace(existing.ReplacedByTokenHash))
+            {
+                await RevokeActiveSessionsAsync(existing.UserId, "RefreshTokenReplayDetected", ct);
+            }
+            return null;
+        }
+
+        if (!StringComparer.Ordinal.Equals(existing.DeviceId, request.DeviceId))
+        {
+            activities.Add(new UserActivityHistory { UserId = existing.UserId, ActivityType = "RefreshTokenDeviceMismatch" });
+            await uow.SaveChangesAsync(ct);
+            return null;
+        }
+
         var user = await users.GetByIdAsync(existing.UserId, ct);
         if (user is null || !user.IsActive) return null;
         existing.RevokedAtUtc = DateTime.UtcNow;
@@ -65,13 +82,15 @@ public sealed class AuthService(
         await uow.SaveChangesAsync(ct);
     }
 
-    public async Task RevokeAllAsync(Guid userId, CancellationToken ct)
+    public Task RevokeAllAsync(Guid userId, CancellationToken ct) => RevokeActiveSessionsAsync(userId, "SessionsRevoked", ct);
+
+    private async Task RevokeActiveSessionsAsync(Guid userId, string activityType, CancellationToken ct)
     {
         foreach (var token in await refreshTokens.ListActiveAsync(userId, ct))
         {
             token.RevokedAtUtc = DateTime.UtcNow;
         }
-        activities.Add(new UserActivityHistory { UserId = userId, ActivityType = "SessionsRevoked" });
+        activities.Add(new UserActivityHistory { UserId = userId, ActivityType = activityType });
         await uow.SaveChangesAsync(ct);
     }
 
