@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using AppColoreando.Application.Abstractions;
 using AppColoreando.Application.Contracts;
 using AppColoreando.Domain.Entities;
@@ -412,14 +412,59 @@ public sealed class ArtworkBundleProcessor : IArtworkBundleProcessor
     public BundleValidationResult Validate(string bundleJson)
     {
         var errors = new List<string>();
-        using var doc = JsonDocument.Parse(bundleJson);
-        var root = doc.RootElement;
-        var paletteCount = root.TryGetProperty("palette", out var palette) && palette.ValueKind == JsonValueKind.Array ? palette.GetArrayLength() : 0;
-        var regionCount = root.TryGetProperty("regions", out var regions) && regions.ValueKind == JsonValueKind.Array ? regions.GetArrayLength() : 0;
-        if (paletteCount == 0) errors.Add("Palette is required.");
-        if (regionCount == 0) errors.Add("At least one region is required.");
-        var difficulty = Math.Clamp((regionCount / 20) + (paletteCount / 6) + 1, 1, 5);
-        var checksum = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(bundleJson))).ToLowerInvariant();
-        return new BundleValidationResult(errors.Count == 0, regionCount, paletteCount, difficulty, checksum, errors);
+        if (string.IsNullOrWhiteSpace(bundleJson))
+        {
+            return Invalid("Bundle JSON is required.");
+        }
+
+        JsonDocument doc;
+        try
+        {
+            doc = JsonDocument.Parse(bundleJson);
+        }
+        catch (JsonException)
+        {
+            return Invalid("Bundle JSON is invalid.");
+        }
+
+        using (doc)
+        {
+            var root = doc.RootElement;
+            var paletteCount = root.TryGetProperty("palette", out var palette) && palette.ValueKind == JsonValueKind.Array ? palette.GetArrayLength() : 0;
+            var regionCount = root.TryGetProperty("regions", out var regions) && regions.ValueKind == JsonValueKind.Array ? regions.GetArrayLength() : 0;
+            if (paletteCount == 0) errors.Add("Palette is required.");
+            if (regionCount == 0) errors.Add("At least one region is required.");
+
+            var paletteIds = new HashSet<int>();
+            if (paletteCount > 0)
+            {
+                foreach (var item in palette.EnumerateArray())
+                {
+                    if (!item.TryGetProperty("id", out var idNode) || !idNode.TryGetInt32(out var id) || id <= 0 || !paletteIds.Add(id))
+                        errors.Add("Palette ids must be positive and unique.");
+                }
+            }
+
+            var regionIds = new HashSet<int>();
+            if (regionCount > 0)
+            {
+                foreach (var region in regions.EnumerateArray())
+                {
+                    if (!region.TryGetProperty("id", out var idNode) || !idNode.TryGetInt32(out var regionId) || regionId <= 0 || !regionIds.Add(regionId))
+                        errors.Add("Region ids must be positive and unique.");
+                    if (!region.TryGetProperty("colorId", out var colorNode) || !colorNode.TryGetInt32(out var colorId) || !paletteIds.Contains(colorId))
+                        errors.Add("Every region colorId must reference the palette.");
+                    if (!region.TryGetProperty("polygon", out var polygon) || polygon.ValueKind != JsonValueKind.Array || polygon.GetArrayLength() < 3)
+                        errors.Add("Every region requires a polygon with at least three points.");
+                }
+            }
+
+            var difficulty = Math.Clamp((regionCount / 20) + (paletteCount / 6) + 1, 1, 5);
+            var checksum = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(bundleJson))).ToLowerInvariant();
+            return new BundleValidationResult(errors.Count == 0, regionCount, paletteCount, difficulty, checksum, errors.Distinct().ToArray());
+        }
     }
+
+    private static BundleValidationResult Invalid(string error) => new(false, 0, 0, 1, string.Empty, [error]);
 }
+
