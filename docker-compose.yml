@@ -1,0 +1,55 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: appcoloreando
+      POSTGRES_USER: appcoloreando
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appcoloreando -d appcoloreando"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: src/AppColoreando.Api/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=appcoloreando;Username=appcoloreando;Password=${POSTGRES_PASSWORD}
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: AppColoreando
+      Jwt__Audience: AppColoreando.MobileAdmin
+      Cors__AllowedOrigins__0: http://localhost:4200
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  admin:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install && npm start -- --host 0.0.0.0"
+    volumes:
+      - ./apps/admin:/app
+    ports:
+      - "4200:4200"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
