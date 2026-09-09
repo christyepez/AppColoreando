@@ -4,9 +4,9 @@ from uuid import UUID
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-from app.processor import ProcessorOptions, process_image
+from app.processor import ProcessorOptions, process_image, process_variants
 
-app = FastAPI(title="AppColoreando Visual Processor", version="0.2.0")
+app = FastAPI(title="AppColoreando Visual Processor", version="0.3.0")
 OUTPUT_ROOT = Path("/content-data/generation-jobs")
 
 
@@ -22,9 +22,10 @@ class ProcessRequest(BaseModel):
     curveSmoothness: float
     saturationBoost: float
     contrastBoost: float
+    generateVariants: bool = True
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "healthy", "engine": "s17-visual-processing-mvp"}
+    return {"status": "healthy", "engine": "s19-difficulty-variant-generator"}
 
 
 @app.post("/process")
@@ -50,10 +51,11 @@ def process(request: ProcessRequest) -> dict:
         difficulty=request.difficulty,
     )
     try:
-        result = process_image(
-            source,
-            OUTPUT_ROOT / str(request.jobId),
-            options,
+        job_output = OUTPUT_ROOT / str(request.jobId)
+        result = (
+            process_variants(source, job_output, options, request.difficulty)
+            if request.generateVariants
+            else process_image(source, job_output, options)
         )
         return {
             "success": True,

@@ -21,3 +21,4 @@
 | S16 | Completed | Organic mobile artwork UX plus Content Generation foundation: source assets, presets, jobs, RabbitMQ worker, Visual Processor contract/stub, EF migration and 17/17 backend tests. |
 | S17 | Completed | Visual Processing MVP: deterministic LAB segmentation, connected playable regions, contour cleanup, Bézier SVG paths, vivid source-derived palette, numbered line-art/colored previews, QA metrics, Docker/pytest validation and CI integration. |
 | S18 | Completed | Palette Intelligence & Region Quality: Delta-E near-color merging, vivid named source-derived colors, edge-aware label smoothing, difficulty-aware micro-region merging and QA metrics; Kids/Detailed smoke comparison validated. |
+| S19 | Completed | Difficulty Generator creates Kids/Easy/Normal/Detailed/Master variant packs from one source asset with a schema 2.1 root manifest and per-variant QA. |

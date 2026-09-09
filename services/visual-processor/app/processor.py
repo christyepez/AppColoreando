@@ -442,3 +442,75 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
         "colorCount": len(palette),
         "qa": qa,
     }
+
+
+def _variant_options(base: ProcessorOptions, difficulty: str) -> ProcessorOptions:
+    code = difficulty.lower()
+    region_factor = {"kids": 0.45, "easy": 0.70, "normal": 1.0, "detailed": 1.55, "master": 2.2}[code]
+    color_adjust = {"kids": -3, "easy": -1, "normal": 0, "detailed": 3, "master": 6}[code]
+    simplify = {
+        "kids": max(base.simplification_tolerance, 0.68),
+        "easy": max(base.simplification_tolerance, 0.52),
+        "normal": base.simplification_tolerance,
+        "detailed": min(base.simplification_tolerance, 0.32),
+        "master": min(base.simplification_tolerance, 0.22),
+    }[code]
+    return ProcessorOptions(
+        target_regions=max(12, min(360, round(base.target_regions * region_factor))),
+        max_colors=max(4, min(24, base.max_colors + color_adjust)),
+        simplification_tolerance=simplify,
+        edge_sensitivity=min(1.0, base.edge_sensitivity + (0.08 if code in {"detailed", "master"} else 0.0)),
+        curve_smoothness=base.curve_smoothness,
+        saturation_boost=base.saturation_boost,
+        contrast_boost=base.contrast_boost,
+        difficulty=difficulty,
+    )
+
+
+def process_variants(
+    source_path: Path,
+    output_dir: Path,
+    base_options: ProcessorOptions,
+    primary_difficulty: str = "Normal",
+) -> dict:
+    difficulties = ("Kids", "Easy", "Normal", "Detailed", "Master")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    variants: list[dict] = []
+
+    for difficulty in difficulties:
+        variant_dir = output_dir / "variants" / difficulty.lower()
+        options = _variant_options(base_options, difficulty)
+        result = process_image(source_path, variant_dir, options)
+        variants.append({
+            "code": difficulty.lower(),
+            "difficulty": difficulty,
+            "manifestPath": result["manifestPath"],
+            "regionCount": result["regionCount"],
+            "colorCount": result["colorCount"],
+            "qa": result["qa"],
+            "isPrimary": difficulty.lower() == primary_difficulty.lower(),
+        })
+
+    primary = next(
+        (item for item in variants if item["isPrimary"]),
+        next(item for item in variants if item["difficulty"] == "Normal"),
+    )
+    pack_manifest = {
+        "schemaVersion": "2.1",
+        "type": "variant-pack",
+        "sourcePath": str(source_path),
+        "primaryDifficulty": primary["difficulty"],
+        "primaryManifestPath": primary["manifestPath"],
+        "variantCount": len(variants),
+        "variants": variants,
+    }
+    manifest_path = output_dir / "manifest.json"
+    manifest_path.write_text(
+        json.dumps(pack_manifest, indent=2), encoding="utf-8"
+    )
+    return {
+        "manifestPath": str(manifest_path),
+        "variantCount": len(variants),
+        "primaryManifestPath": primary["manifestPath"],
+        "variants": variants,
+    }

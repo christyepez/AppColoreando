@@ -93,3 +93,38 @@ def test_difficulty_controls_micro_region_threshold() -> None:
 
     assert _micro_region_threshold((400, 400), kids) > _micro_region_threshold((400, 400), detailed)
     assert _friendly_color_name("#FFD429") == "Amarillo Sol"
+
+
+def test_process_variants_creates_complete_pack(tmp_path: Path) -> None:
+    source = tmp_path / "duck.png"
+    output = tmp_path / "pack"
+    _sample_image(source)
+    from app.processor import process_variants
+
+    result = process_variants(source, output, _options(), "Normal")
+    assert result["variantCount"] == 5
+    manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["schemaVersion"] == "2.1"
+    assert manifest["type"] == "variant-pack"
+    assert manifest["primaryDifficulty"] == "Normal"
+    assert [v["difficulty"] for v in manifest["variants"]] == [
+        "Kids", "Easy", "Normal", "Detailed", "Master"
+    ]
+    assert all(Path(v["manifestPath"]).exists() for v in manifest["variants"])
+
+
+def test_variant_options_scale_from_kids_to_master() -> None:
+    from app.processor import _variant_options
+
+    base = _options()
+    variants = [
+        _variant_options(base, difficulty)
+        for difficulty in ("Kids", "Easy", "Normal", "Detailed", "Master")
+    ]
+    assert [v.target_regions for v in variants] == sorted(
+        v.target_regions for v in variants
+    )
+    assert [v.max_colors for v in variants] == sorted(
+        v.max_colors for v in variants
+    )
+    assert variants[0].simplification_tolerance > variants[-1].simplification_tolerance

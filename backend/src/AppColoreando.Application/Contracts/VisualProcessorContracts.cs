@@ -11,7 +11,8 @@ public sealed record VisualProcessorRequest(
     double EdgeSensitivity,
     double CurveSmoothness,
     double SaturationBoost,
-    double ContrastBoost);
+    double ContrastBoost,
+    bool GenerateVariants = true);
 
 public sealed record VisualProcessorResult(
     bool Success,
