@@ -78,6 +78,12 @@ S21 measures the maximum inscribed radius around each label anchor produced by t
 
 Raster and SVG line-art previews use the same readability decision. QA records labels visible at base scale and labels requiring zoom so dense artwork can be rejected or tuned before publication.
 
-## S22 next
+## S22 Preview Renderer
 
-S22 will improve preview rendering and catalog assets: consistent thumbnails, colored cards, high-resolution line-art, WebP output and deterministic preview framing for the mobile library and Admin review queue.
+S22 generates deterministic square preview assets for the mobile library and Admin review workflow. Every playable variant now emits a 512x512 `thumbnail.webp`, 768x768 `catalog-preview.webp` and 1024x1024 `lineart-preview.webp` in addition to the original PNG and SVG assets.
+
+The renderer preserves aspect ratio, centers artwork on a neutral canvas, applies consistent margins and uses fixed WebP quality settings so cards remain visually stable across differently shaped source images.
+
+## S23 next
+
+S23 will turn Aura, Tesoro, Revela, Postal Viva, Lumina and Eclipse into real processing behaviors rather than labels, with palette/preview transformations recorded explicitly in variant metadata.

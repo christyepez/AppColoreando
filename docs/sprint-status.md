@@ -24,3 +24,4 @@
 | S19 | Completed | Difficulty Generator creates Kids/Easy/Normal/Detailed/Master variant packs from one source asset with a schema 2.1 root manifest and per-variant QA. |
 | S20 | Completed | Semantic region candidates and roles added to generated bundles with semantic QA counts and heuristic beak/eye/water/sky/foliage detection. |
 | S21 | Completed | Number placement/readability metadata added with safe radius, zoom threshold, dynamic font sizing and QA counts for hidden labels. |
+| S22 | Completed | Deterministic WebP preview renderer emits 512 thumbnail, 768 catalog preview and 1024 line-art preview per generated variant. |

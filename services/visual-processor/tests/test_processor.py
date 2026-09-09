@@ -161,3 +161,22 @@ def test_label_readability_metadata_is_consistent(tmp_path: Path) -> None:
     visible = sum(1 for region in regions if region["labelVisibleAtBase"])
     assert manifest["qa"]["labelsVisibleAtBase"] == visible
     assert manifest["qa"]["labelsRequiringZoom"] == len(regions) - visible
+
+
+def test_preview_renderer_creates_catalog_assets(tmp_path: Path) -> None:
+    source = tmp_path / "duck.png"
+    output = tmp_path / "previews"
+    _sample_image(source)
+    process_image(source, output, _options())
+
+    expected = {
+        "thumbnail.webp": 512,
+        "catalog-preview.webp": 768,
+        "lineart-preview.webp": 1024,
+    }
+    for name, size in expected.items():
+        path = output / name
+        assert path.exists()
+        image = cv2.imread(str(path))
+        assert image is not None
+        assert image.shape[:2] == (size, size)

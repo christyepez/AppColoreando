@@ -397,6 +397,26 @@ def _render_line_art(labels: np.ndarray, regions: list[Region]) -> np.ndarray:
     return canvas
 
 
+def _square_preview(image: np.ndarray, size: int, margin_ratio: float = 0.04) -> np.ndarray:
+    height, width = image.shape[:2]
+    canvas = np.full((size, size, 3), 250, dtype=np.uint8)
+    usable = max(1, int(size * (1.0 - 2.0 * margin_ratio)))
+    scale = min(usable / max(1, width), usable / max(1, height))
+    target_w = max(1, min(size, round(width * scale)))
+    target_h = max(1, min(size, round(height * scale)))
+    interpolation = cv2.INTER_AREA if scale <= 1.0 else cv2.INTER_CUBIC
+    resized = cv2.resize(image, (target_w, target_h), interpolation=interpolation)
+    x = (size - target_w) // 2
+    y = (size - target_h) // 2
+    canvas[y:y + target_h, x:x + target_w] = resized
+    return canvas
+
+
+def _write_webp(path: Path, image: np.ndarray, quality: int = 92) -> None:
+    if not cv2.imwrite(str(path), image, [cv2.IMWRITE_WEBP_QUALITY, quality]):
+        raise ValueError("PREVIEW_WRITE_FAILED")
+
+
 def _write_svg(path: Path, regions: list[Region], palette: list[str], line_art: bool = False) -> None:
     lines = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1">']
     for region in regions:
@@ -433,6 +453,9 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
     line_art = _render_line_art(labels, regions)
     cv2.imwrite(str(output_dir / "preview-colored.png"), colored)
     cv2.imwrite(str(output_dir / "preview-lineart.png"), line_art)
+    _write_webp(output_dir / "thumbnail.webp", _square_preview(colored, 512), 90)
+    _write_webp(output_dir / "catalog-preview.webp", _square_preview(colored, 768), 92)
+    _write_webp(output_dir / "lineart-preview.webp", _square_preview(line_art, 1024), 94)
     _write_svg(output_dir / "artwork.svg", regions, palette)
     _write_svg(output_dir / "artwork-lineart.svg", regions, palette, line_art=True)
 
@@ -498,6 +521,9 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
         "lineArtSvgPath": str(output_dir / "artwork-lineart.svg"),
         "lineArtPreviewPath": str(output_dir / "preview-lineart.png"),
         "coloredPreviewPath": str(output_dir / "preview-colored.png"),
+        "thumbnailPath": str(output_dir / "thumbnail.webp"),
+        "catalogPreviewPath": str(output_dir / "catalog-preview.webp"),
+        "lineArtWebpPath": str(output_dir / "lineart-preview.webp"),
         "qa": qa,
     }
     manifest_path = output_dir / "manifest.json"
