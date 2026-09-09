@@ -19,6 +19,7 @@ class ProcessorOptions:
     saturation_boost: float
     contrast_boost: float
     difficulty: str = "Normal"
+    style_code: str = "natural"
 
 
 @dataclass
@@ -137,6 +138,32 @@ def _vivid_palette(centers_lab: np.ndarray, saturation_boost: float, contrast_bo
         blue, green, red = [int(x) for x in vivid]
         colors.append(f"#{red:02X}{green:02X}{blue:02X}")
     return colors
+
+
+def _hex_from_bgr(value: np.ndarray) -> str:
+    blue, green, red = [int(np.clip(x, 0, 255)) for x in value]
+    return f"#{red:02X}{green:02X}{blue:02X}"
+
+
+def _apply_style_palette(palette: list[str], style_code: str) -> list[str]:
+    style = style_code.lower()
+    result: list[str] = []
+    for color in palette:
+        bgr = np.uint8([[[_hex_to_bgr(color)[0], _hex_to_bgr(color)[1], _hex_to_bgr(color)[2]]]])
+        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)[0, 0].astype(np.float32)
+        if style == "aura":
+            hsv[1] = np.clip(hsv[1] * 1.18, 0, 255); hsv[2] = np.clip(hsv[2] * 1.05 + 4, 0, 255)
+        elif style == "tesoro":
+            hsv[1] = np.clip(hsv[1] * 1.08, 0, 255); hsv[2] = np.clip((hsv[2] - 128) * 1.14 + 128, 22, 252)
+        elif style == "postal-viva":
+            vivid = cv2.cvtColor(np.uint8([[hsv]]), cv2.COLOR_HSV2BGR)[0, 0].astype(np.float32)
+            vivid[0] *= 0.92; vivid[2] = min(255.0, vivid[2] * 1.08 + 4); result.append(_hex_from_bgr(vivid)); continue
+        elif style == "lumina":
+            hsv[1] = np.clip(hsv[1] * 1.10, 0, 255); hsv[2] = np.clip(hsv[2] * 1.16 + 10, 0, 255)
+        elif style == "eclipse":
+            hsv[1] = np.clip(hsv[1] * 1.24, 0, 255); hsv[2] = np.clip(hsv[2] * 0.62, 18, 190)
+        result.append(_hex_from_bgr(cv2.cvtColor(np.uint8([[hsv]]), cv2.COLOR_HSV2BGR)[0, 0]))
+    return result
 
 
 def _friendly_color_name(value: str) -> str:
@@ -412,6 +439,40 @@ def _square_preview(image: np.ndarray, size: int, margin_ratio: float = 0.04) ->
     return canvas
 
 
+def _style_effect_metadata(style_code: str) -> dict:
+    style = style_code.lower()
+    names = {
+        "aura": "vivid-glow", "tesoro": "premium-detail", "revela": "partial-reveal",
+        "postal-viva": "warm-editorial", "lumina": "highlight-boost", "eclipse": "dark-vivid",
+    }
+    return {"styleCode": style, "treatment": names.get(style, "natural")}
+
+
+def _render_style_preview(colored: np.ndarray, line_art: np.ndarray, style_code: str) -> np.ndarray:
+    style = style_code.lower()
+    if style == "aura":
+        blur = cv2.GaussianBlur(colored, (0, 0), 5)
+        return cv2.addWeighted(colored, 1.08, blur, 0.18, 0)
+    if style == "tesoro":
+        blur = cv2.GaussianBlur(colored, (0, 0), 2)
+        return cv2.addWeighted(colored, 1.35, blur, -0.35, 0)
+    if style == "revela":
+        yy, xx = np.indices(colored.shape[:2])
+        mask = (xx + yy) < int((colored.shape[0] + colored.shape[1]) * 0.72)
+        result = colored.copy(); result[mask] = line_art[mask]; return result
+    if style == "postal-viva":
+        overlay = np.full_like(colored, (215, 235, 252))
+        return cv2.addWeighted(colored, 0.90, overlay, 0.10, 0)
+    if style == "lumina":
+        return cv2.convertScaleAbs(colored, alpha=1.08, beta=18)
+    if style == "eclipse":
+        hsv = cv2.cvtColor(colored, cv2.COLOR_BGR2HSV).astype(np.float32)
+        hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 1.20, 0, 255)
+        hsv[:, :, 2] = np.clip(hsv[:, :, 2] * 0.58, 12, 190)
+        return cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
+    return colored.copy()
+
+
 def _write_webp(path: Path, image: np.ndarray, quality: int = 92) -> None:
     if not cv2.imwrite(str(path), image, [cv2.IMWRITE_WEBP_QUALITY, quality]):
         raise ValueError("PREVIEW_WRITE_FAILED")
@@ -443,6 +504,7 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
     labels = _edge_aware_smooth_labels(labels, lab, options.edge_sensitivity)
     labels = _merge_micro_regions(labels, centers, options)
     palette = _vivid_palette(centers, options.saturation_boost, options.contrast_boost)
+    palette = _apply_style_palette(palette, options.style_code)
     regions = _extract_regions(labels, options)
     _assign_semantics(regions, labels.shape, palette)
     if not regions:
@@ -451,11 +513,13 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
     output_dir.mkdir(parents=True, exist_ok=True)
     colored = _render_colored(labels, palette)
     line_art = _render_line_art(labels, regions)
+    special_preview = _render_style_preview(colored, line_art, options.style_code)
     cv2.imwrite(str(output_dir / "preview-colored.png"), colored)
     cv2.imwrite(str(output_dir / "preview-lineart.png"), line_art)
     _write_webp(output_dir / "thumbnail.webp", _square_preview(colored, 512), 90)
     _write_webp(output_dir / "catalog-preview.webp", _square_preview(colored, 768), 92)
     _write_webp(output_dir / "lineart-preview.webp", _square_preview(line_art, 1024), 94)
+    _write_webp(output_dir / "special-preview.webp", _square_preview(special_preview, 768), 92)
     _write_svg(output_dir / "artwork.svg", regions, palette)
     _write_svg(output_dir / "artwork-lineart.svg", regions, palette, line_art=True)
 
@@ -524,6 +588,8 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
         "thumbnailPath": str(output_dir / "thumbnail.webp"),
         "catalogPreviewPath": str(output_dir / "catalog-preview.webp"),
         "lineArtWebpPath": str(output_dir / "lineart-preview.webp"),
+        "specialPreviewPath": str(output_dir / "special-preview.webp"),
+        "effect": _style_effect_metadata(options.style_code),
         "qa": qa,
     }
     manifest_path = output_dir / "manifest.json"
@@ -556,6 +622,7 @@ def _variant_options(base: ProcessorOptions, difficulty: str) -> ProcessorOption
         saturation_boost=base.saturation_boost,
         contrast_boost=base.contrast_boost,
         difficulty=difficulty,
+        style_code=base.style_code,
     )
 
 

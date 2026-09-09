@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from app.processor import ProcessorOptions, process_image, process_variants
 
-app = FastAPI(title="AppColoreando Visual Processor", version="0.6.0")
+app = FastAPI(title="AppColoreando Visual Processor", version="0.7.0")
 OUTPUT_ROOT = Path("/content-data/generation-jobs")
 
 
@@ -25,7 +25,7 @@ class ProcessRequest(BaseModel):
     generateVariants: bool = True
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "healthy", "engine": "s22-preview-renderer"}
+    return {"status": "healthy", "engine": "s23-special-effects-engine"}
 
 
 @app.post("/process")
@@ -49,6 +49,7 @@ def process(request: ProcessRequest) -> dict:
         saturation_boost=request.saturationBoost,
         contrast_boost=request.contrastBoost,
         difficulty=request.difficulty,
+        style_code=request.presetCode,
     )
     try:
         job_output = OUTPUT_ROOT / str(request.jobId)

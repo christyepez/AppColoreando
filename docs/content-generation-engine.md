@@ -87,3 +87,7 @@ The renderer preserves aspect ratio, centers artwork on a neutral canvas, applie
 ## S23 next
 
 S23 will turn Aura, Tesoro, Revela, Postal Viva, Lumina and Eclipse into real processing behaviors rather than labels, with palette/preview transformations recorded explicitly in variant metadata.
+
+## S23 Special Effects Engine
+
+The generation preset now changes the rendered result, not only catalog metadata. Aura increases vibrancy and glow; Tesoro sharpens premium detail; Revela creates a partial-reveal preview; Postal Viva applies a warm editorial treatment; Lumina boosts highlights; Eclipse darkens the composition while preserving saturated accents. Every generated variant publishes special-preview.webp plus effect metadata in its manifest, while the underlying numbered regions remain playable.

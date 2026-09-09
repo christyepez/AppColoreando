@@ -180,3 +180,28 @@ def test_preview_renderer_creates_catalog_assets(tmp_path: Path) -> None:
         image = cv2.imread(str(path))
         assert image is not None
         assert image.shape[:2] == (size, size)
+
+
+def test_special_effects_emit_distinct_previews(tmp_path: Path) -> None:
+    source = tmp_path / "duck.png"
+    _sample_image(source)
+    expected = {
+        "aura": "vivid-glow", "tesoro": "premium-detail",
+        "revela": "partial-reveal", "postal-viva": "warm-editorial",
+        "lumina": "highlight-boost", "eclipse": "dark-vivid",
+    }
+    for style, treatment in expected.items():
+        output = tmp_path / style
+        base = _options()
+        options = ProcessorOptions(
+            base.target_regions, base.max_colors, base.simplification_tolerance,
+            base.edge_sensitivity, base.curve_smoothness, base.saturation_boost,
+            base.contrast_boost, base.difficulty, style,
+        )
+        process_image(source, output, options)
+        manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+        assert manifest["effect"] == {"styleCode": style, "treatment": treatment}
+        special = cv2.imread(str(output / "special-preview.webp"))
+        catalog = cv2.imread(str(output / "catalog-preview.webp"))
+        assert special is not None and special.shape[:2] == (768, 768)
+        assert catalog is not None and np.mean(cv2.absdiff(special, catalog)) > 0.1
