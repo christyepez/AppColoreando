@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using AppColoreando.Application.Abstractions;
+using AppColoreando.Application.Contracts;
 using Microsoft.Extensions.Configuration;
 using RabbitMQ.Client;
 
@@ -52,5 +53,66 @@ public sealed class RabbitMqGenerationJobQueue(IConfiguration configuration) : I
         await channel.BasicPublishAsync(
             exchange: string.Empty, routingKey: queueName, mandatory: false,
             basicProperties: properties, body: body, cancellationToken: ct);
+    }
+}
+
+public sealed class FileSystemGenerationArtifactReader : IGenerationArtifactReader
+{
+    private static readonly IReadOnlyDictionary<string, string> ArtifactProperties =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["thumbnail"] = "thumbnailPath",
+            ["catalog"] = "catalogPreviewPath",
+            ["lineart"] = "lineArtWebpPath",
+            ["special"] = "specialPreviewPath"
+        };
+
+    public async Task<GenerationArtifactDto?> ReadAsync(
+        string resultManifestPath,
+        string artifactKind,
+        CancellationToken ct)
+    {
+        if (!ArtifactProperties.TryGetValue(artifactKind, out var property))
+            return null;
+
+        var rootManifest = Path.GetFullPath(resultManifestPath);
+        if (!File.Exists(rootManifest)) return null;
+        var rootDirectory = Path.GetDirectoryName(rootManifest)!;
+        var variantManifest = await ResolvePrimaryManifestAsync(rootManifest, ct);
+        if (!IsWithin(rootDirectory, variantManifest) || !File.Exists(variantManifest))
+            return null;
+        await using var stream = File.OpenRead(variantManifest);
+        using var manifest = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        if (!manifest.RootElement.TryGetProperty(property, out var pathNode)) return null;
+
+        var artifactPath = Path.GetFullPath(pathNode.GetString() ?? string.Empty);
+        if (!IsWithin(rootDirectory, artifactPath) || !File.Exists(artifactPath)) return null;
+        var content = await File.ReadAllBytesAsync(artifactPath, ct);
+        var extension = Path.GetExtension(artifactPath).ToLowerInvariant();
+        var contentType = extension switch
+        {
+            ".webp" => "image/webp",
+            ".png" => "image/png",
+            ".svg" => "image/svg+xml",
+            _ => "application/octet-stream"
+        };
+        return new GenerationArtifactDto(content, contentType, Path.GetFileName(artifactPath));
+    }
+
+    private static async Task<string> ResolvePrimaryManifestAsync(string rootManifest, CancellationToken ct)
+    {
+        await using var stream = File.OpenRead(rootManifest);
+        using var document = await JsonDocument.ParseAsync(stream, cancellationToken: ct);
+        if (document.RootElement.TryGetProperty("type", out var type) && type.GetString() == "variant-pack" &&
+            document.RootElement.TryGetProperty("primaryManifestPath", out var primary))
+            return Path.GetFullPath(primary.GetString() ?? rootManifest);
+        return rootManifest;
+    }
+
+    private static bool IsWithin(string rootDirectory, string candidate)
+    {
+        var root = Path.GetFullPath(rootDirectory).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        return Path.GetFullPath(candidate).StartsWith(root, comparison);
     }
 }

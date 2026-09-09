@@ -46,4 +46,13 @@ public interface IContentGenerationService
         Guid userId, CreateGenerationJobRequest request, CancellationToken ct);
     Task<GenerationJobDto?> GetGenerationJobAsync(Guid id, CancellationToken ct);
     Task<IReadOnlyCollection<GenerationJobDto>> GetGenerationJobsAsync(int take, CancellationToken ct);
+    Task<GenerationArtifactDto?> GetGenerationArtifactAsync(Guid jobId, string artifactKind, CancellationToken ct);
+}
+
+public interface IGenerationArtifactReader
+{
+    Task<GenerationArtifactDto?> ReadAsync(
+        string resultManifestPath,
+        string artifactKind,
+        CancellationToken ct);
 }

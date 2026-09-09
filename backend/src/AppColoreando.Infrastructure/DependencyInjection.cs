@@ -38,6 +38,7 @@ public static class DependencyInjection
         services.AddScoped<IStylePresetRepository, StylePresetRepository>();
         services.AddScoped<IGenerationJobRepository, GenerationJobRepository>();
         services.AddSingleton<ISourceAssetStorage, FileSystemSourceAssetStorage>();
+        services.AddSingleton<IGenerationArtifactReader, FileSystemGenerationArtifactReader>();
         services.AddSingleton<IGenerationJobQueue, RabbitMqGenerationJobQueue>();
         services.AddHttpClient<IVisualProcessorClient, VisualProcessorClient>(client =>
         {

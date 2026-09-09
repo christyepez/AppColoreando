@@ -26,3 +26,11 @@
 | S21 | Completed | Number placement/readability metadata added with safe radius, zoom threshold, dynamic font sizing and QA counts for hidden labels. |
 | S22 | Completed | Deterministic WebP preview renderer emits 512 thumbnail, 768 catalog preview and 1024 line-art preview per generated variant. |
 | S23 | Completed | Special Effects Engine: Aura, Tesoro, Revela, Postal Viva, Lumina and Eclipse alter palette/preview deterministically; 10/10 processor tests pass. |
+
+## S24 Admin Generation Studio
+
+S24 adds an authenticated Angular Generation Studio for source upload, source/preset/difficulty selection, generation-job creation, recent-job monitoring and generated-preview inspection. The Studio polls active jobs and renders catalog, line-art and special-effect assets through authenticated Blob URLs.
+
+The backend exposes a constrained generation-artifact endpoint. Artifact kinds are whitelisted and resolved through the primary variant manifest; filesystem paths are canonicalized and must remain inside the generation-job root. Traversal/out-of-root access is rejected.
+
+Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; Angular production build passes; git diff check passes.

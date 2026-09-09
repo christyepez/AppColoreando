@@ -4,8 +4,9 @@ import { Component, Injectable, computed, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { bootstrapApplication } from '@angular/platform-browser';
 import { CanActivateFn, Router, RouterLink, RouterOutlet, provideRouter } from '@angular/router';
+import { apiBase } from './api-config';
+import { GenerationStudioComponent } from './generation-studio.component';
 
-const apiBase = (globalThis as { APP_COLOREANDO_API?: string }).APP_COLOREANDO_API ?? 'http://localhost:8080/api';
 
 type AuthResponse = { accessToken: string; refreshToken: string; accessTokenExpiresAtUtc: string; user: UserDto };
 type UserDto = { id: string; email: string; displayName: string; role: string; isActive: boolean; lastLoginAtUtc?: string };
@@ -107,7 +108,7 @@ class LoginComponent {
     <div class="shell">
       <aside>
         <h2>AppColoreando</h2>
-        <a routerLink="/">Dashboard</a><a routerLink="/content">Content</a><a routerLink="/users">Users</a><a routerLink="/licenses">Licenses</a><a routerLink="/audit">Audit</a>
+        <a routerLink="/">Dashboard</a><a routerLink="/content">Content</a><a routerLink="/generation">Generation Studio</a><a routerLink="/users">Users</a><a routerLink="/licenses">Licenses</a><a routerLink="/audit">Audit</a>
         <button class="ghost" (click)="logout()">Sign out</button>
       </aside>
       <main><header><h1>{{title()}}</h1><span>{{session.user()?.role}}</span></header><router-outlet /></main>
@@ -171,6 +172,7 @@ bootstrapApplication(RootComponent, {
       { path: '', component: ShellComponent, canActivate: [authGuard], children: [
         { path: '', component: DashboardComponent },
         { path: 'content', component: ContentComponent },
+        { path: 'generation', component: GenerationStudioComponent },
         { path: 'users', component: UsersComponent },
         { path: 'licenses', component: LicensesComponent },
         { path: 'audit', component: AuditComponent }

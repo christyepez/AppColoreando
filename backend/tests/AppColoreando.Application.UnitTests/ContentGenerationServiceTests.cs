@@ -56,9 +56,10 @@ public sealed class ContentGenerationServiceTests
         FakePresetRepository? presets = null,
         FakeJobRepository? jobs = null,
         FakeStorage? storage = null,
+        FakeArtifactReader? artifacts = null,
         FakeQueue? queue = null) =>
         new(assets ?? new(), presets ?? new(), jobs ?? new(), storage ?? new(),
-            queue ?? new(), new FakeAuditRepository(), new FakeUnitOfWork());
+            artifacts ?? new(), queue ?? new(), new FakeAuditRepository(), new FakeUnitOfWork());
 
     private sealed class FakeAssetRepository(params SourceAsset[] seed) : ISourceAssetRepository
     {
@@ -89,6 +90,12 @@ public sealed class ContentGenerationServiceTests
     {
         public Task<string> SaveAsync(Guid assetId, string fileName, Stream content, CancellationToken ct) =>
             Task.FromResult($"memory://{fileName}");
+    }
+
+    private sealed class FakeArtifactReader : IGenerationArtifactReader
+    {
+        public Task<GenerationArtifactDto?> ReadAsync(string resultManifestPath, string artifactKind, CancellationToken ct) =>
+            Task.FromResult<GenerationArtifactDto?>(new([1, 2, 3], "image/webp", "preview.webp"));
     }
 
     private sealed class FakeQueue : IGenerationJobQueue

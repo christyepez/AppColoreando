@@ -17,6 +17,7 @@
   <ItemGroup>
     <Using Include="Xunit" />
     <ProjectReference Include="..\..\src\AppColoreando.Application\AppColoreando.Application.csproj" />
+    <ProjectReference Include="..\..\src\AppColoreando.Infrastructure\AppColoreando.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

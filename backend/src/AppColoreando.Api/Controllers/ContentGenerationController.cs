@@ -46,5 +46,12 @@ public sealed class ContentGenerationController(IContentGenerationService servic
         return result is null ? NotFound() : Ok(result);
     }
 
+    [HttpGet("jobs/{id:guid}/artifacts/{kind}")]
+    public async Task<IActionResult> GetArtifact(Guid id, string kind, CancellationToken ct)
+    {
+        var artifact = await service.GetGenerationArtifactAsync(id, kind, ct);
+        return artifact is null ? NotFound() : File(artifact.Content, artifact.ContentType);
+    }
+
     private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 }

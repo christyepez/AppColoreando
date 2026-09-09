@@ -10,6 +10,7 @@ public sealed class ContentGenerationService(
     IStylePresetRepository presets,
     IGenerationJobRepository jobs,
     ISourceAssetStorage storage,
+    IGenerationArtifactReader artifacts,
     IGenerationJobQueue queue,
     IAuditRepository audit,
     IUnitOfWork uow) : IContentGenerationService
@@ -108,6 +109,13 @@ public sealed class ContentGenerationService(
 
     public Task<IReadOnlyCollection<GenerationJobDto>> GetGenerationJobsAsync(int take, CancellationToken ct) =>
         jobs.ListAsync(Math.Clamp(take, 1, 200), ct);
+
+    public async Task<GenerationArtifactDto?> GetGenerationArtifactAsync(Guid jobId, string artifactKind, CancellationToken ct)
+    {
+        var job = await jobs.GetAsync(jobId, ct);
+        if (job is null || string.IsNullOrWhiteSpace(job.ResultManifestPath)) return null;
+        return await artifacts.ReadAsync(job.ResultManifestPath, artifactKind, ct);
+    }
 
     private static SourceAssetDto Map(SourceAsset x) =>
         new(x.Id, x.FileName, x.ContentType, x.StoragePath, x.SizeBytes,

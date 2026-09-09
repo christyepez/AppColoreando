@@ -24,3 +24,8 @@ public sealed record GenerationJobDto(
     string? ErrorCode, string? ErrorMessage, string? ProcessorJobId,
     string? ResultManifestPath, DateTime CreatedAtUtc,
     DateTime? StartedAtUtc, DateTime? CompletedAtUtc);
+
+public sealed record GenerationArtifactDto(
+    byte[] Content,
+    string ContentType,
+    string FileName);

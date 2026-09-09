@@ -91,3 +91,9 @@ S23 will turn Aura, Tesoro, Revela, Postal Viva, Lumina and Eclipse into real pr
 ## S23 Special Effects Engine
 
 The generation preset now changes the rendered result, not only catalog metadata. Aura increases vibrancy and glow; Tesoro sharpens premium detail; Revela creates a partial-reveal preview; Postal Viva applies a warm editorial treatment; Lumina boosts highlights; Eclipse darkens the composition while preserving saturated accents. Every generated variant publishes special-preview.webp plus effect metadata in its manifest, while the underlying numbered regions remain playable.
+
+## S24 Generation Studio
+
+The Admin Generation Studio is the operational entry point for the engine. Content managers can upload a source image, select a style preset and difficulty, queue generation, monitor status and inspect generated catalog/line-art/special previews without direct filesystem access.
+
+Generated previews are served only through the authenticated Admin API. The artifact reader accepts known logical kinds and resolves them from the manifest, preventing arbitrary path access while keeping storage implementation details outside Angular.
