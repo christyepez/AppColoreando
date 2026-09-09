@@ -44,6 +44,14 @@ Natural, Kids, Detailed, Aura, Tesoro, Revela, Postal Viva, Lumina and Eclipse a
 - Visual Processor Docker build: pass.
 - Visual Processor health and missing-source error contract: pass.
 
-## S17 next
+## S17 Visual Processing MVP
 
-S17 replaces the foundation processor stub with real preprocessing, segmentation, contour extraction, region cleanup, vectorization and first playable bundle generation. The first acceptance target is an uploaded animal/flower image converted automatically into closed organic vector regions with an image-derived vivid palette.
+S17 replaces the processor stub with a deterministic first-generation image-to-template engine. The pipeline performs edge-preserving preprocessing, LAB color clustering, connected-region extraction, morphology cleanup, contour simplification, Chaikin smoothing and cubic Bezier SVG generation. Colors are derived from the source image and receive controlled saturation/contrast enhancement rather than random assignment.
+
+The generated playable bundle contains `artwork.svg`, `artwork-lineart.svg`, `regions.json`, `palette.json`, `preview-colored.png`, `preview-lineart.png` and `manifest.json`. Region label anchors are computed with a distance transform so paint numbers remain inside playable areas. QA metadata currently includes region count, color count, playable coverage and average region area.
+
+Validation uses a synthetic animal composition and verifies closed vector regions, cubic Bezier commands, image-derived palette values, numbered line-art, bundle completeness and coverage. The Visual Processor is now a first-class GitHub Actions job and Docker image.
+
+## S18 next
+
+S18 will add palette intelligence and region-quality improvements: perceptual near-color merging, named vivid colors, difficulty-aware micro-region merging and stronger edge-aware segmentation while preserving the source composition.

@@ -1,12 +1,14 @@
 from pathlib import Path
 from uuid import UUID
-import json
 
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-app = FastAPI(title="AppColoreando Visual Processor", version="0.1.0")
+from app.processor import ProcessorOptions, process_image
+
+app = FastAPI(title="AppColoreando Visual Processor", version="0.2.0")
 OUTPUT_ROOT = Path("/content-data/generation-jobs")
+
 
 class ProcessRequest(BaseModel):
     jobId: UUID
@@ -20,10 +22,10 @@ class ProcessRequest(BaseModel):
     curveSmoothness: float
     saturationBoost: float
     contrastBoost: float
-
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "healthy"}
+    return {"status": "healthy", "engine": "s17-visual-processing-mvp"}
+
 
 @app.post("/process")
 def process(request: ProcessRequest) -> dict:
@@ -34,28 +36,44 @@ def process(request: ProcessRequest) -> dict:
             "processorJobId": str(request.jobId),
             "resultManifestPath": None,
             "errorCode": "SOURCE_NOT_FOUND",
-            "errorMessage": f"Source asset not found: {request.sourcePath}"
+            "errorMessage": f"Source asset not found: {source}",
         }
 
-    job_dir = OUTPUT_ROOT / str(request.jobId)
-    job_dir.mkdir(parents=True, exist_ok=True)
-    manifest = {
-        "schemaVersion": "2.0",
-        "jobId": str(request.jobId),
-        "processor": "s16-foundation-stub",
-        "sourcePath": request.sourcePath,
-        "preset": request.presetCode,
-        "difficulty": request.difficulty,
-        "targetRegions": request.targetRegions,
-        "maxColors": request.maxColors,
-        "status": "preview-ready"
-    }
-    manifest_path = job_dir / "manifest.json"
-    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    return {
-        "success": True,
-        "processorJobId": str(request.jobId),
-        "resultManifestPath": str(manifest_path),
-        "errorCode": None,
-        "errorMessage": None
-    }
+    options = ProcessorOptions(
+        target_regions=request.targetRegions,
+        max_colors=request.maxColors,
+        simplification_tolerance=request.simplificationTolerance,
+        edge_sensitivity=request.edgeSensitivity,
+        curve_smoothness=request.curveSmoothness,
+        saturation_boost=request.saturationBoost,
+        contrast_boost=request.contrastBoost,
+    )
+    try:
+        result = process_image(
+            source,
+            OUTPUT_ROOT / str(request.jobId),
+            options,
+        )
+        return {
+            "success": True,
+            "processorJobId": str(request.jobId),
+            "resultManifestPath": result["manifestPath"],
+            "errorCode": None,
+            "errorMessage": None,
+        }
+    except ValueError as exc:
+        return {
+            "success": False,
+            "processorJobId": str(request.jobId),
+            "resultManifestPath": None,
+            "errorCode": str(exc),
+            "errorMessage": str(exc),
+        }
+    except Exception as exc:
+        return {
+            "success": False,
+            "processorJobId": str(request.jobId),
+            "resultManifestPath": None,
+            "errorCode": "PROCESSING_FAILED",
+            "errorMessage": str(exc),
+        }

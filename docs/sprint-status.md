@@ -19,3 +19,4 @@
 | S14 | Release-ready with external distribution blockers | IDs/version/signing guardrails/store checklist/mobile CI complete. Android SDK and Apple/Google production signing remain external prerequisites. |
 | S15 | Completed | Flutter Web/Windows targets, Android emulator automation and Android/Web smoke validation. |
 | S16 | Completed | Organic mobile artwork UX plus Content Generation foundation: source assets, presets, jobs, RabbitMQ worker, Visual Processor contract/stub, EF migration and 17/17 backend tests. |
+| S17 | Completed | Visual Processing MVP: deterministic LAB segmentation, connected playable regions, contour cleanup, Bézier SVG paths, vivid source-derived palette, numbered line-art/colored previews, QA metrics, Docker/pytest validation and CI integration. |
