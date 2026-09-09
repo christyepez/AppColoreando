@@ -8,3 +8,8 @@
 .vscode/
 *.user
 *.suo
+
+# Python / Visual Processor
+**/__pycache__/
+**/.pytest_cache/
+*.py[cod]
