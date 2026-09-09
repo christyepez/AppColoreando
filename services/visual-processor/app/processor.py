@@ -18,6 +18,9 @@ class ProcessorOptions:
     curve_smoothness: float
     saturation_boost: float
     contrast_boost: float
+    difficulty: str = "Normal"
+
+
 @dataclass
 class Region:
     id: int
@@ -70,6 +73,51 @@ def _cluster_colors(lab: np.ndarray, color_count: int) -> tuple[np.ndarray, np.n
         pixels, color_count, None, criteria, 3, cv2.KMEANS_PP_CENTERS
     )
     return labels.reshape(lab.shape[:2]), centers.astype(np.uint8)
+
+
+def _opencv_lab_to_cie(value: np.ndarray) -> np.ndarray:
+    result = value.astype(np.float32).copy()
+    result[..., 0] = result[..., 0] * (100.0 / 255.0)
+    result[..., 1:] -= 128.0
+    return result
+
+
+def _delta_e(first: np.ndarray, second: np.ndarray) -> float:
+    a = _opencv_lab_to_cie(first.reshape((1, 3)))[0]
+    b = _opencv_lab_to_cie(second.reshape((1, 3)))[0]
+    return float(np.linalg.norm(a - b))
+
+
+def _difficulty_delta_e(difficulty: str) -> float:
+    return {"kids": 14.0, "easy": 11.0, "normal": 8.0, "detailed": 5.0, "master": 3.0}.get(difficulty.lower(), 8.0)
+
+
+def _merge_similar_clusters(labels: np.ndarray, centers: np.ndarray, difficulty: str) -> tuple[np.ndarray, np.ndarray]:
+    counts = np.bincount(labels.reshape(-1), minlength=len(centers))
+    groups: list[list[int]] = []
+    for cluster_id in sorted(range(len(centers)), key=lambda idx: (-int(counts[idx]), idx)):
+        target = None
+        best = float("inf")
+        for group_id, members in enumerate(groups):
+            distance = min(_delta_e(centers[cluster_id], centers[member]) for member in members)
+            if distance <= _difficulty_delta_e(difficulty) and distance < best:
+                target, best = group_id, distance
+        if target is None:
+            groups.append([cluster_id])
+        else:
+            groups[target].append(cluster_id)
+
+    remap = np.zeros(len(centers), dtype=np.int32)
+    merged_centers: list[np.ndarray] = []
+    for new_id, members in enumerate(groups):
+        weights = counts[members].astype(np.float64)
+        merged = np.average(centers[members].astype(np.float64), axis=0, weights=weights)
+        merged_centers.append(np.rint(merged).astype(np.uint8))
+        for old_id in members:
+            remap[old_id] = new_id
+    return remap[labels], np.asarray(merged_centers, dtype=np.uint8)
+
+
 def _vivid_palette(centers_lab: np.ndarray, saturation_boost: float, contrast_boost: float) -> list[str]:
     lab = centers_lab.reshape((-1, 1, 3))
     bgr = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR).reshape((-1, 3))
@@ -83,6 +131,108 @@ def _vivid_palette(centers_lab: np.ndarray, saturation_boost: float, contrast_bo
         blue, green, red = [int(x) for x in vivid]
         colors.append(f"#{red:02X}{green:02X}{blue:02X}")
     return colors
+
+
+def _friendly_color_name(value: str) -> str:
+    blue, green, red = _hex_to_bgr(value)
+    hsv = cv2.cvtColor(np.uint8([[[blue, green, red]]]), cv2.COLOR_BGR2HSV)[0, 0]
+    hue = float(hsv[0]) * 2.0
+    saturation = float(hsv[1]) / 255.0
+    brightness = float(hsv[2]) / 255.0
+    if saturation < 0.10:
+        if brightness > 0.90:
+            return "Blanco Nube"
+        if brightness < 0.24:
+            return "Carbon"
+        return "Gris Perla"
+    if hue < 15 or hue >= 345:
+        return "Rojo Coral"
+    if hue < 30:
+        return "Naranja Mandarina"
+    if hue < 46:
+        return "Ambar Dorado"
+    if hue < 68:
+        return "Amarillo Sol"
+    if hue < 105:
+        return "Verde Lima"
+    if hue < 155:
+        return "Verde Bosque"
+    if hue < 190:
+        return "Turquesa"
+    if hue < 235:
+        return "Azul Laguna"
+    if hue < 270:
+        return "Azul Noche"
+    if hue < 305:
+        return "Violeta"
+    return "Magenta"
+
+
+def _edge_aware_smooth_labels(labels: np.ndarray, lab: np.ndarray, sensitivity: float) -> np.ndarray:
+    l_channel = lab[:, :, 0]
+    sensitivity = max(0.0, min(float(sensitivity), 1.0))
+    low = int(20 + (1.0 - sensitivity) * 35)
+    high = int(65 + (1.0 - sensitivity) * 75)
+    edges = cv2.Canny(l_channel, low, high)
+    barrier = cv2.dilate(edges, np.ones((3, 3), np.uint8), iterations=1)
+    median = cv2.medianBlur(labels.astype(np.uint8), 3).astype(np.int32)
+    result = labels.astype(np.int32).copy()
+    result[barrier == 0] = median[barrier == 0]
+    return result
+
+
+def _difficulty_area_factor(difficulty: str) -> float:
+    return {"kids": 0.62, "easy": 0.36, "normal": 0.16, "detailed": 0.07, "master": 0.03}.get(difficulty.lower(), 0.16)
+
+
+def _micro_region_threshold(shape: tuple[int, int], options: ProcessorOptions) -> int:
+    image_area = int(shape[0] * shape[1])
+    baseline = image_area / max(options.target_regions, 8)
+    return max(12, int(baseline * _difficulty_area_factor(options.difficulty)))
+
+
+def _merge_micro_regions(labels: np.ndarray, centers: np.ndarray, options: ProcessorOptions) -> np.ndarray:
+    result = labels.astype(np.int32).copy()
+    threshold = _micro_region_threshold(result.shape, options)
+    kernel = np.ones((3, 3), np.uint8)
+    for _ in range(2):
+        changed = False
+        for color_id in range(len(centers)):
+            mask = np.where(result == color_id, 255, 0).astype(np.uint8)
+            count, components, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+            for component_id in range(1, count):
+                area = int(stats[component_id, cv2.CC_STAT_AREA])
+                if area >= threshold:
+                    continue
+                component_mask = components == component_id
+                border = cv2.dilate(component_mask.astype(np.uint8), kernel, iterations=1).astype(bool)
+                border &= ~component_mask
+                neighbours = result[border]
+                neighbours = neighbours[neighbours != color_id]
+                if neighbours.size == 0:
+                    continue
+                candidates, counts = np.unique(neighbours, return_counts=True)
+                best_id = None
+                best_score = float("inf")
+                for candidate, boundary_count in zip(candidates, counts):
+                    distance = _delta_e(centers[color_id], centers[int(candidate)])
+                    score = distance / max(1.0, float(boundary_count))
+                    if score < best_score:
+                        best_score = score
+                        best_id = int(candidate)
+                if best_id is not None:
+                    result[component_mask] = best_id
+                    changed = True
+        if not changed:
+            break
+    return result
+
+
+def _minimum_palette_delta_e(centers: np.ndarray) -> float:
+    if len(centers) < 2:
+        return 0.0
+    values = [_delta_e(centers[i], centers[j]) for i in range(len(centers)) for j in range(i + 1, len(centers))]
+    return round(min(values), 2) if values else 0.0
 
 
 def _chaikin(points: np.ndarray, iterations: int) -> np.ndarray:
@@ -128,7 +278,7 @@ def _bounds(contour: np.ndarray, width: int, height: int) -> tuple[float, float,
 def _extract_regions(labels: np.ndarray, options: ProcessorOptions) -> list[Region]:
     height, width = labels.shape
     image_area = width * height
-    minimum_area = max(18, int(image_area / max(options.target_regions, 8) * 0.16))
+    minimum_area = max(10, int(_micro_region_threshold(labels.shape, options) * 0.35))
     regions: list[Region] = []
     next_id = 1
     for color_id in range(int(labels.max()) + 1):
@@ -217,6 +367,9 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
     lab = _preprocess(image, options.edge_sensitivity)
     color_count = max(3, min(options.max_colors, 24))
     labels, centers = _cluster_colors(lab, color_count)
+    labels, centers = _merge_similar_clusters(labels, centers, options.difficulty)
+    labels = _edge_aware_smooth_labels(labels, lab, options.edge_sensitivity)
+    labels = _merge_micro_regions(labels, centers, options)
     palette = _vivid_palette(centers, options.saturation_boost, options.contrast_boost)
     regions = _extract_regions(labels, options)
     if not regions:
@@ -231,7 +384,7 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
     _write_svg(output_dir / "artwork-lineart.svg", regions, palette, line_art=True)
 
     palette_payload = [
-        {"id": index + 1, "hex": color, "name": f"Color {index + 1}"}
+        {"id": index + 1, "hex": color, "name": _friendly_color_name(color)}
         for index, color in enumerate(palette)
     ]
     (output_dir / "palette.json").write_text(
@@ -265,6 +418,9 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
         "colorCount": len(palette),
         "playableCoverage": round(min(1.0, playable_area / image_area), 4),
         "averageRegionArea": round(playable_area / len(regions), 2),
+        "minimumPaletteDeltaE": _minimum_palette_delta_e(centers),
+        "microRegionThreshold": _micro_region_threshold(labels.shape, options),
+        "difficulty": options.difficulty,
     }
     manifest = {
         "schemaVersion": "2.0",

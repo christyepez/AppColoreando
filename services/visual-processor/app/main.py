@@ -47,6 +47,7 @@ def process(request: ProcessRequest) -> dict:
         curve_smoothness=request.curveSmoothness,
         saturation_boost=request.saturationBoost,
         contrast_boost=request.contrastBoost,
+        difficulty=request.difficulty,
     )
     try:
         result = process_image(

@@ -52,6 +52,14 @@ The generated playable bundle contains `artwork.svg`, `artwork-lineart.svg`, `re
 
 Validation uses a synthetic animal composition and verifies closed vector regions, cubic Bezier commands, image-derived palette values, numbered line-art, bundle completeness and coverage. The Visual Processor is now a first-class GitHub Actions job and Docker image.
 
-## S18 next
+## S18 Palette Intelligence & Region Quality
 
-S18 will add palette intelligence and region-quality improvements: perceptual near-color merging, named vivid colors, difficulty-aware micro-region merging and stronger edge-aware segmentation while preserving the source composition.
+S18 adds perceptual palette and region cleanup. K-means clusters are merged with CIE Lab Delta-E thresholds that vary by difficulty, avoiding multiple paint numbers for colors the eye perceives as effectively the same. Palette colors remain derived from the source image, receive controlled vividness tuning and are emitted with friendly names such as Blanco Nube, Azul Laguna, Amarillo Sol, Naranja Mandarina, Ambar Dorado, Verde Bosque and Carbon.
+
+Labels are smoothed only away from detected edges, preserving important object boundaries. Small connected components are merged into perceptually compatible neighboring regions using difficulty-specific thresholds: Kids/Easy simplify aggressively while Detailed/Master retain more local detail. QA now records minimum palette Delta-E, the applied micro-region threshold and difficulty.
+
+The same synthetic animal source produced 4 regions in Kids and 6 in Detailed with 100% playable coverage, demonstrating that difficulty now changes topology rather than only metadata.
+
+## S19 next
+
+S19 will formalize the Difficulty Generator: generate Kids, Easy, Normal, Detailed and Master variants from one source asset in a single job, persist variant manifests, compare QA across variants and prepare the catalog/mobile contracts for selecting a generated variant.

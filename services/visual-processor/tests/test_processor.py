@@ -4,7 +4,10 @@ import json
 import cv2
 import numpy as np
 
-from app.processor import ProcessorOptions, process_image
+from app.processor import (
+    ProcessorOptions, _friendly_color_name, _merge_similar_clusters,
+    _micro_region_threshold, process_image,
+)
 
 
 def _sample_image(path: Path) -> None:
@@ -48,6 +51,7 @@ def test_process_image_creates_playable_bundle(tmp_path: Path) -> None:
     palette = json.loads((output / "palette.json").read_text(encoding="utf-8"))
     assert palette
     assert all(color["hex"].startswith("#") and len(color["hex"]) == 7 for color in palette)
+    assert all(not color["name"].startswith("Color ") for color in palette)
 
     manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["schemaVersion"] == "2.0"
@@ -71,3 +75,21 @@ def test_process_image_is_deterministic(tmp_path: Path) -> None:
 
     assert first_regions == second_regions
     assert first_palette == second_palette
+
+def test_near_colors_merge_perceptually() -> None:
+    labels = np.array([[0, 1, 2], [0, 1, 2]], dtype=np.int32)
+    centers = np.array([[150, 140, 130], [153, 142, 131], [90, 180, 170]], dtype=np.uint8)
+
+    merged_labels, merged_centers = _merge_similar_clusters(labels, centers, "Normal")
+
+    assert len(merged_centers) == 2
+    assert merged_labels[0, 0] == merged_labels[0, 1]
+    assert merged_labels[0, 2] != merged_labels[0, 0]
+
+
+def test_difficulty_controls_micro_region_threshold() -> None:
+    kids = ProcessorOptions(40, 8, 0.45, 0.5, 0.8, 0.1, 0.1, "Kids")
+    detailed = ProcessorOptions(40, 8, 0.45, 0.5, 0.8, 0.1, 0.1, "Detailed")
+
+    assert _micro_region_threshold((400, 400), kids) > _micro_region_threshold((400, 400), detailed)
+    assert _friendly_color_name("#FFD429") == "Amarillo Sol"
