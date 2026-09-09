@@ -23,6 +23,11 @@ services:
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-appcoloreando}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   minio:
     image: minio/minio:latest
@@ -48,14 +53,21 @@ services:
       Seed__Enabled: "true"
       Seed__AdminEmail: ${SEED__ADMINEMAIL:-}
       Seed__AdminPassword: ${SEED__ADMINPASSWORD:-}
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__User: ${RABBITMQ_USER:-appcoloreando}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD}
+      ContentGeneration__SourceAssetRoot: /content-data/source-assets
       Cors__AllowedOrigins__0: http://localhost:4200
       Cors__AllowedOrigins__1: http://localhost:8083
     ports: ["8080:8080"]
+    volumes: [content_data:/content-data]
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
 
   worker:
     build:
@@ -65,9 +77,30 @@ services:
       DOTNET_ENVIRONMENT: Development
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=appcoloreando;Username=appcoloreando;Password=${POSTGRES_PASSWORD}
       Jwt__Key: ${JWT_KEY}
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__User: ${RABBITMQ_USER:-appcoloreando}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD}
+      VisualProcessor__BaseUrl: http://visual-processor:8090/
+    volumes: [content_data:/content-data]
     depends_on:
       postgres:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      visual-processor:
+        condition: service_healthy
+
+  visual-processor:
+    build:
+      context: ./services/visual-processor
+      dockerfile: Dockerfile
+    ports: ["8090:8090"]
+    volumes: [content_data:/content-data]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   admin:
     image: node:22-alpine
@@ -102,3 +135,4 @@ volumes:
   postgres_data:
   minio_data:
   grafana_data:
+  content_data:

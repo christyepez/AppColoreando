@@ -13,6 +13,7 @@ public static class DependencyInjection
         services.AddScoped<ICatalogService, CatalogService>();
         services.AddScoped<IUserContentService, UserContentService>();
         services.AddScoped<IAdminService, AdminService>();
+        services.AddScoped<IContentGenerationService, ContentGenerationService>();
         services.AddScoped<IArtworkBundleProcessor, ArtworkBundleProcessor>();
         return services;
     }

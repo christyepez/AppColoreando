@@ -1,5 +1,6 @@
 using AppColoreando.Application.Abstractions;
 using AppColoreando.Domain.Entities;
+using AppColoreando.Infrastructure.ContentGeneration;
 using AppColoreando.Infrastructure.Persistence;
 using AppColoreando.Infrastructure.Security;
 using Microsoft.AspNetCore.Identity;
@@ -33,6 +34,17 @@ public static class DependencyInjection
         services.AddScoped<IUserActivityRepository, UserActivityRepository>();
         services.AddScoped<IUserMetricRepository, UserMetricRepository>();
         services.AddScoped<IAuditRepository, AuditRepository>();
+        services.AddScoped<ISourceAssetRepository, SourceAssetRepository>();
+        services.AddScoped<IStylePresetRepository, StylePresetRepository>();
+        services.AddScoped<IGenerationJobRepository, GenerationJobRepository>();
+        services.AddSingleton<ISourceAssetStorage, FileSystemSourceAssetStorage>();
+        services.AddSingleton<IGenerationJobQueue, RabbitMqGenerationJobQueue>();
+        services.AddHttpClient<IVisualProcessorClient, VisualProcessorClient>(client =>
+        {
+            var baseUrl = configuration["VisualProcessor:BaseUrl"] ?? "http://localhost:8090/";
+            client.BaseAddress = new Uri(baseUrl.EndsWith("/") ? baseUrl : baseUrl + "/");
+            client.Timeout = TimeSpan.FromMinutes(5);
+        });
         services.AddScoped<IPasswordHasher<AppUser>, PasswordHasher<AppUser>>();
         services.AddScoped<IPasswordService, PasswordService>();
         services.AddScoped<ITokenService, TokenService>();

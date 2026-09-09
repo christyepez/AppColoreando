@@ -42,6 +42,11 @@ public static class DatabaseInitializer
             if (!await db.Brands.AnyAsync(x => x.Slug == brand, ct)) db.Brands.Add(new Brand { Name = brand.Replace('-', ' '), Slug = brand, Enabled = false, Notes = "Rights placeholder only. No unlicensed artwork is seeded." });
         }
 
+        foreach (var preset in StylePresetSeed.Items)
+        {
+            if (!await db.StylePresets.AnyAsync(x => x.Code == preset.Code, ct)) db.StylePresets.Add(preset);
+        }
+
         await db.SaveChangesAsync(ct);
         var geometry = await db.Categories.SingleAsync(x => x.Slug == "geometry", ct);
         if (!await db.Artworks.AnyAsync(x => x.Title == "Andean Geometry Demo", ct))

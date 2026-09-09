@@ -25,6 +25,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<UserActivityHistory> UserActivityHistory => Set<UserActivityHistory>();
     public DbSet<UserMetricDaily> UserMetricsDaily => Set<UserMetricDaily>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<SourceAsset> SourceAssets => Set<SourceAsset>();
+    public DbSet<StylePreset> StylePresets => Set<StylePreset>();
+    public DbSet<ArtworkGenerationJob> ArtworkGenerationJobs => Set<ArtworkGenerationJob>();
+    public DbSet<ArtworkGenerationIssue> ArtworkGenerationIssues => Set<ArtworkGenerationIssue>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -50,6 +54,13 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         b.Entity<Artwork>().Property(x => x.PublishingStatus).HasConversion<string>();
         b.Entity<ArtworkAsset>().Property(x => x.Kind).HasConversion<string>();
         b.Entity<SyncOperation>().Property(x => x.Status).HasConversion<string>();
+        b.Entity<SourceAsset>().HasIndex(x => x.Sha256);
+        b.Entity<SourceAsset>().Property(x => x.Status).HasConversion<string>();
+        b.Entity<StylePreset>().HasIndex(x => x.Code).IsUnique();
+        b.Entity<ArtworkGenerationJob>().HasIndex(x => new { x.Status, x.CreatedAtUtc });
+        b.Entity<ArtworkGenerationJob>().Property(x => x.Status).HasConversion<string>();
+        b.Entity<ArtworkGenerationJob>().Property(x => x.Difficulty).HasConversion<string>();
+        b.Entity<ArtworkGenerationIssue>().HasIndex(x => x.ArtworkGenerationJobId);
     }
 }
 
