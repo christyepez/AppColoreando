@@ -23,3 +23,4 @@
 | S18 | Completed | Palette Intelligence & Region Quality: Delta-E near-color merging, vivid named source-derived colors, edge-aware label smoothing, difficulty-aware micro-region merging and QA metrics; Kids/Detailed smoke comparison validated. |
 | S19 | Completed | Difficulty Generator creates Kids/Easy/Normal/Detailed/Master variant packs from one source asset with a schema 2.1 root manifest and per-variant QA. |
 | S20 | Completed | Semantic region candidates and roles added to generated bundles with semantic QA counts and heuristic beak/eye/water/sky/foliage detection. |
+| S21 | Completed | Number placement/readability metadata added with safe radius, zoom threshold, dynamic font sizing and QA counts for hidden labels. |

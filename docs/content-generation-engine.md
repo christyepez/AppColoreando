@@ -72,6 +72,12 @@ S20 adds deterministic semantic candidates to every generated region. Geometry, 
 
 Generated `regions.json` records `semanticTag` and `semanticRole`; QA records semantic tag counts per variant. The semantic layer is designed so a future AI vision adapter can replace or enrich heuristics without changing the mobile bundle shape.
 
-## S21 next
+## S21 Number Placement & Readability
 
-S21 will harden number placement and readability for dense artworks: label-safe regions, zoom-aware visibility metadata, minimum inscribed radius and fallback anchors for narrow shapes.
+S21 measures the maximum inscribed radius around each label anchor produced by the distance transform. Every region now exposes `labelRadius`, `labelMinZoom`, `labelFontSize` and `labelVisibleAtBase`, allowing narrow regions to defer their paint number until the user zooms instead of rendering unreadable or overlapping labels.
+
+Raster and SVG line-art previews use the same readability decision. QA records labels visible at base scale and labels requiring zoom so dense artwork can be rejected or tuned before publication.
+
+## S22 next
+
+S22 will improve preview rendering and catalog assets: consistent thumbnails, colored cards, high-resolution line-art, WebP output and deterministic preview framing for the mobile library and Admin review queue.

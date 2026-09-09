@@ -144,3 +144,20 @@ def test_semantic_candidates_are_emitted(tmp_path: Path) -> None:
     assert "environment" in roles
     assert all(region["semanticTag"] for region in regions)
     assert all(region["semanticRole"] for region in regions)
+
+
+def test_label_readability_metadata_is_consistent(tmp_path: Path) -> None:
+    source = tmp_path / "duck.png"
+    output = tmp_path / "labels"
+    _sample_image(source)
+    process_image(source, output, _options())
+
+    regions = json.loads((output / "regions.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+    assert regions
+    assert all(region["labelRadius"] >= 0.0 for region in regions)
+    assert all(region["labelMinZoom"] >= 1.0 for region in regions)
+    assert all(0.012 <= region["labelFontSize"] <= 0.028 for region in regions)
+    visible = sum(1 for region in regions if region["labelVisibleAtBase"])
+    assert manifest["qa"]["labelsVisibleAtBase"] == visible
+    assert manifest["qa"]["labelsRequiringZoom"] == len(regions) - visible

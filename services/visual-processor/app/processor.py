@@ -33,6 +33,10 @@ class Region:
     svg_path: str
     semantic_tag: str = "unclassified"
     semantic_role: str = "detail"
+    label_radius: float = 0.0
+    label_min_zoom: float = 1.0
+    label_font_size: float = 0.022
+    label_visible_at_base: bool = True
 
 
 def _read_image(path: Path) -> np.ndarray:
@@ -301,10 +305,18 @@ def _svg_path(points: np.ndarray, width: int, height: int) -> str:
     commands.append("Z")
     return " ".join(commands)
 
-def _label_anchor(mask: np.ndarray, width: int, height: int) -> tuple[float, float]:
+def _label_anchor(mask: np.ndarray, width: int, height: int) -> tuple[float, float, float]:
     distance = cv2.distanceTransform(mask, cv2.DIST_L2, 5)
-    _, _, _, max_location = cv2.minMaxLoc(distance)
-    return max_location[0] / width, max_location[1] / height
+    _, max_distance, _, max_location = cv2.minMaxLoc(distance)
+    radius = float(max_distance) / max(1, min(width, height))
+    return max_location[0] / width, max_location[1] / height, radius
+
+
+def _configure_label_readability(region: Region) -> None:
+    radius = region.label_radius
+    region.label_visible_at_base = radius >= 0.012
+    region.label_min_zoom = 1.0 if radius >= 0.018 else 1.5 if radius >= 0.012 else 2.5 if radius >= 0.007 else 4.0
+    region.label_font_size = float(np.clip(radius * 1.15, 0.012, 0.028))
 
 
 def _bounds(contour: np.ndarray, width: int, height: int) -> tuple[float, float, float, float]:
@@ -340,9 +352,12 @@ def _extract_regions(labels: np.ndarray, options: ProcessorOptions) -> list[Regi
             path = _svg_path(points, width, height)
             if not path:
                 continue
-            label_x, label_y = _label_anchor(component_mask, width, height)
-            regions.append(Region(next_id, color_id + 1, area, contour,
-                                  label_x, label_y, _bounds(contour, width, height), path))
+            label_x, label_y, label_radius = _label_anchor(component_mask, width, height)
+            region = Region(next_id, color_id + 1, area, contour,
+                            label_x, label_y, _bounds(contour, width, height), path)
+            region.label_radius = label_radius
+            _configure_label_readability(region)
+            regions.append(region)
             next_id += 1
     return regions
 def _hex_to_bgr(value: str) -> tuple[int, int, int]:
@@ -368,7 +383,7 @@ def _render_line_art(labels: np.ndarray, regions: list[Region]) -> np.ndarray:
     canvas[1:, :][vertical] = (55, 55, 55)
     height, width = labels.shape
     for region in regions:
-        if region.area < max(80, width * height * 0.00035):
+        if region.area < max(80, width * height * 0.00035) or not region.label_visible_at_base:
             continue
         if region.label_x < 0.02 or region.label_x > 0.98 or region.label_y < 0.02 or region.label_y > 0.98:
             continue
@@ -390,10 +405,10 @@ def _write_svg(path: Path, regions: list[Region], palette: list[str], line_art: 
             f'<path id="region-{region.id}" d="{region.svg_path}" fill="{color}" '
             'stroke="#363636" stroke-width="0.0015" vector-effect="non-scaling-stroke"/>'
         )
-        if line_art and 0.02 <= region.label_x <= 0.98 and 0.02 <= region.label_y <= 0.98:
+        if line_art and region.label_visible_at_base and 0.02 <= region.label_x <= 0.98 and 0.02 <= region.label_y <= 0.98:
             lines.append(
                 f'<text x="{region.label_x:.6f}" y="{region.label_y:.6f}" '
-                'text-anchor="middle" dominant-baseline="middle" font-size="0.022" '
+                f'text-anchor="middle" dominant-baseline="middle" font-size="{region.label_font_size:.6f}" '
                 f'fill="#777777">{region.color_id}</text>'
             )
     lines.append("</svg>")
@@ -438,6 +453,10 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
             "svgPath": region.svg_path,
             "labelX": round(region.label_x, 6),
             "labelY": round(region.label_y, 6),
+            "labelRadius": round(region.label_radius, 6),
+            "labelMinZoom": round(region.label_min_zoom, 2),
+            "labelFontSize": round(region.label_font_size, 6),
+            "labelVisibleAtBase": region.label_visible_at_base,
             "bounds": {
                 "x": round(region.bounds[0], 6),
                 "y": round(region.bounds[1], 6),
@@ -466,6 +485,8 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
         "microRegionThreshold": _micro_region_threshold(labels.shape, options),
         "difficulty": options.difficulty,
         "semanticCounts": semantic_counts,
+        "labelsVisibleAtBase": sum(1 for region in regions if region.label_visible_at_base),
+        "labelsRequiringZoom": sum(1 for region in regions if not region.label_visible_at_base),
     }
     manifest = {
         "schemaVersion": "2.0",
