@@ -11,6 +11,7 @@ public sealed class ContentGenerationService(
     IGenerationJobRepository jobs,
     ISourceAssetStorage storage,
     IGenerationArtifactReader artifacts,
+    IGenerationAdjustmentStore adjustments,
     IGenerationJobQueue queue,
     IAuditRepository audit,
     IUnitOfWork uow) : IContentGenerationService
@@ -109,6 +110,33 @@ public sealed class ContentGenerationService(
 
     public Task<IReadOnlyCollection<GenerationJobDto>> GetGenerationJobsAsync(int take, CancellationToken ct) =>
         jobs.ListAsync(Math.Clamp(take, 1, 200), ct);
+
+    public async Task<IReadOnlyCollection<RegionAdjustmentDto>> GetGenerationAdjustmentsAsync(Guid jobId, CancellationToken ct)
+    {
+        var job = await jobs.GetAsync(jobId, ct) ?? throw new KeyNotFoundException("Generation job not found.");
+        if (string.IsNullOrWhiteSpace(job.ResultManifestPath)) return [];
+        return await adjustments.ListAsync(job.ResultManifestPath, ct);
+    }
+
+    public async Task<RegionAdjustmentDto> UpsertGenerationAdjustmentAsync(Guid userId, Guid jobId, int regionId, RegionAdjustmentRequest request, CancellationToken ct)
+    {
+        var job = await jobs.GetAsync(jobId, ct) ?? throw new KeyNotFoundException("Generation job not found.");
+        if (string.IsNullOrWhiteSpace(job.ResultManifestPath)) throw new InvalidOperationException("Generation result is not ready.");
+        var result = await adjustments.UpsertAsync(job.ResultManifestPath, regionId, userId, request, ct)
+            ?? throw new KeyNotFoundException("Generated region not found.");
+        audit.Add(new AuditLog { UserId = userId, EntityName = nameof(ArtworkGenerationJob), EntityId = job.Id.ToString(), Action = "GenerationRegionAdjusted", ChangesJson = $"{{\"regionId\":{regionId}}}" });
+        await uow.SaveChangesAsync(ct);
+        return result;
+    }
+
+    public async Task DeleteGenerationAdjustmentAsync(Guid userId, Guid jobId, int regionId, CancellationToken ct)
+    {
+        var job = await jobs.GetAsync(jobId, ct) ?? throw new KeyNotFoundException("Generation job not found.");
+        if (string.IsNullOrWhiteSpace(job.ResultManifestPath)) return;
+        if (!await adjustments.DeleteAsync(job.ResultManifestPath, regionId, ct)) return;
+        audit.Add(new AuditLog { UserId = userId, EntityName = nameof(ArtworkGenerationJob), EntityId = job.Id.ToString(), Action = "GenerationRegionAdjustmentDeleted", ChangesJson = $"{{\"regionId\":{regionId}}}" });
+        await uow.SaveChangesAsync(ct);
+    }
 
     public async Task<GenerationArtifactDto?> GetGenerationArtifactAsync(Guid jobId, string artifactKind, CancellationToken ct)
     {

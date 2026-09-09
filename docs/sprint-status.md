@@ -34,3 +34,12 @@ S24 adds an authenticated Angular Generation Studio for source upload, source/pr
 The backend exposes a constrained generation-artifact endpoint. Artifact kinds are whitelisted and resolved through the primary variant manifest; filesystem paths are canonicalized and must remain inside the generation-job root. Traversal/out-of-root access is rejected.
 
 Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; Angular production build passes; git diff check passes.
+
+## S25 — Manual Fine Tuning — Complete
+- Non-destructive `adjustments.json` overlay per generation job.
+- Region overrides: color, semantic tag/role, number visibility and reviewer note.
+- Generated bundle remains immutable; overrides are auditable and reversible.
+- Generation Studio loads real generated regions/palette and supports save/edit/delete overrides.
+- Artifact whitelist extended safely for `regions` and `palette`.
+- Canonical-path validation blocks external primary manifests and artifact traversal.
+- Validation: .NET Release build 0 warnings/0 errors; backend 23/23 tests PASS; Angular production build PASS.

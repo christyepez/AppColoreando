@@ -20,6 +20,15 @@ type GenerationJob = {
 };
 
 type ArtifactKind = 'catalog' | 'lineart' | 'special';
+type GeneratedRegion = {
+  id: number; colorId: number; semanticTag: string;
+  semanticRole: string; labelVisibleAtBase: boolean;
+};
+type RegionAdjustment = {
+  regionId: number; colorHex?: string; semanticTag?: string;
+  semanticRole?: string; labelVisibleAtBase?: boolean;
+  note?: string; updatedAtUtc: string;
+};
 @Component({
   standalone: true,
   imports: [CommonModule, FormsModule],
@@ -55,6 +64,21 @@ type ArtifactKind = 'catalog' | 'lineart' | 'special';
       </div>
     </section>
 
+    <section class="panel" *ngIf="selectedJob() as job">
+      <div class="section-title"><div><span class="eyebrow">FINE TUNE</span><h3>Region adjustments</h3></div><span class="status-pill">{{adjustments().length}} overrides</span></div>
+      <div class="tune-grid">
+        <label>Region<select [(ngModel)]="editRegionId" (ngModelChange)="selectRegion($event)"><option [ngValue]="0">Select region</option><option *ngFor="let region of regions()" [ngValue]="region.id">#{{region.id}} · {{region.semanticTag}} · color {{region.colorId}}</option></select></label>
+        <label>Color override<input [(ngModel)]="editColorHex" placeholder="#RRGGBB"><small *ngIf="selectedRegion() as region">Generated: {{regionColor(region)}}</small></label>
+        <label>Semantic tag<input [(ngModel)]="editSemanticTag" placeholder="beak / water / subject"></label>
+        <label>Semantic role<input [(ngModel)]="editSemanticRole" placeholder="subject-accent / environment"></label>
+        <label>Number visibility<select [(ngModel)]="editLabelMode"><option value="">Keep generated</option><option value="visible">Visible</option><option value="hidden">Hidden</option></select></label>
+        <label class="wide">Review note<textarea [(ngModel)]="editNote" maxlength="500" rows="3" placeholder="Why this override is needed"></textarea></label>
+      </div>
+      <div class="toolbar compact"><button (click)="saveAdjustment()" [disabled]="!editRegionId || savingAdjustment()">{{savingAdjustment() ? "Saving…" : "Save override"}}</button><button class="secondary" (click)="resetEditor()">Reset editor</button></div>
+      <table *ngIf="adjustments().length"><tr><th>Region</th><th>Color</th><th>Semantic</th><th>Number</th><th>Note</th><th></th></tr>
+        <tr *ngFor="let item of adjustments()"><td>#{{item.regionId}}</td><td>{{item.colorHex || "generated"}}</td><td>{{item.semanticTag || "generated"}} / {{item.semanticRole || "generated"}}</td><td>{{item.labelVisibleAtBase === undefined || item.labelVisibleAtBase === null ? "generated" : (item.labelVisibleAtBase ? "visible" : "hidden")}}</td><td>{{item.note || "—"}}</td><td><button class="secondary" (click)="editAdjustment(item)">Edit</button> <button class="danger" (click)="deleteAdjustment(item.regionId)">Remove</button></td></tr>
+      </table>
+    </section>
     <section class="panel jobs-panel">
       <div class="section-title"><div><span class="eyebrow">QUEUE</span><h3>Generation jobs</h3></div><button class="secondary" (click)="reloadJobs()">Refresh</button></div>
       <table><tr><th>Source</th><th>Preset</th><th>Difficulty</th><th>Status</th><th>Created</th><th></th></tr>
@@ -70,6 +94,16 @@ export class GenerationStudioComponent {
   readonly jobs = signal<GenerationJob[]>([]);
   readonly selectedJob = signal<GenerationJob | null>(null);
   readonly previewUrls = signal<Record<ArtifactKind, string>>({ catalog: '', lineart: '', special: '' });
+  readonly regions = signal<GeneratedRegion[]>([]);
+  readonly palette = signal<{ id: number; hex: string; name: string }[]>([]);
+  readonly adjustments = signal<RegionAdjustment[]>([]);
+  readonly savingAdjustment = signal(false);
+  editRegionId = 0;
+  editColorHex = '';
+  editSemanticTag = '';
+  editSemanticRole = '';
+  editLabelMode = '';
+  editNote = '';
   readonly uploading = signal(false);
   readonly generating = signal(false);
   readonly error = signal('');
@@ -152,7 +186,9 @@ export class GenerationStudioComponent {
   openJob(job: GenerationJob) {
     this.selectedJob.set(job);
     this.clearPreviewUrls();
-    if (this.isPreviewReady(job.status)) this.loadPreviews(job.id);
+    this.regions.set([]); this.palette.set([]); this.adjustments.set([]);
+    this.resetEditor();
+    if (this.isPreviewReady(job.status)) { this.loadPreviews(job.id); this.loadFineTuning(job.id); }
     this.schedulePolling([job]);
   }
 
@@ -170,6 +206,49 @@ export class GenerationStudioComponent {
     return ({ aura: 'Aura', tesoro: 'Tesoro', revela: 'Revela', 'postal-viva': 'Postal Viva', lumina: 'Lumina', eclipse: 'Eclipse' } as Record<string, string>)[code] ?? code;
   }
 
+  selectedRegion() { return this.regions().find(x => x.id === Number(this.editRegionId)); }
+  regionColor(region: GeneratedRegion) { return this.palette().find(x => x.id === region.colorId)?.hex ?? ('color ' + region.colorId); }
+  selectRegion(value: number) {
+    this.editRegionId = Number(value || 0);
+    const existing = this.adjustments().find(x => x.regionId === this.editRegionId);
+    const generated = this.selectedRegion();
+    this.editColorHex = existing?.colorHex ?? '';
+    this.editSemanticTag = existing?.semanticTag ?? generated?.semanticTag ?? '';
+    this.editSemanticRole = existing?.semanticRole ?? generated?.semanticRole ?? '';
+    this.editLabelMode = existing?.labelVisibleAtBase === undefined || existing?.labelVisibleAtBase === null ? '' : (existing.labelVisibleAtBase ? 'visible' : 'hidden');
+    this.editNote = existing?.note ?? '';
+  }
+  editAdjustment(item: RegionAdjustment) { this.selectRegion(item.regionId); }
+  saveAdjustment() {
+    const job = this.selectedJob();
+    if (!job || !this.editRegionId) return;
+    this.savingAdjustment.set(true); this.error.set('');
+    const payload = {
+      colorHex: this.editColorHex.trim() || null,
+      semanticTag: this.editSemanticTag.trim() || null,
+      semanticRole: this.editSemanticRole.trim() || null,
+      labelVisibleAtBase: this.editLabelMode === '' ? null : this.editLabelMode === 'visible',
+      note: this.editNote.trim() || null
+    };
+    const url = apiBase + '/admin/content-generation/jobs/' + job.id + '/adjustments/' + this.editRegionId;
+    this.http.put<RegionAdjustment>(url, payload).subscribe({
+      next: () => { this.savingAdjustment.set(false); this.loadAdjustments(job.id); },
+      error: () => { this.error.set('Region override could not be saved.'); this.savingAdjustment.set(false); }
+    });
+  }
+  deleteAdjustment(regionId: number) {
+    const job = this.selectedJob();
+    if (!job) return;
+    const url = apiBase + '/admin/content-generation/jobs/' + job.id + '/adjustments/' + regionId;
+    this.http.delete(url).subscribe({
+      next: () => { this.loadAdjustments(job.id); if (this.editRegionId === regionId) this.selectRegion(regionId); },
+      error: () => this.error.set('Region override could not be removed.')
+    });
+  }
+  resetEditor() {
+    this.editRegionId = 0; this.editColorHex = ''; this.editSemanticTag = '';
+    this.editSemanticRole = ''; this.editLabelMode = ''; this.editNote = '';
+  }
   ngOnDestroy() {
     if (this.pollHandle) clearTimeout(this.pollHandle);
     this.clearPreviewUrls();
@@ -198,6 +277,24 @@ export class GenerationStudioComponent {
     });
   }
 
+  private loadFineTuning(jobId: string) {
+    const base = apiBase + '/admin/content-generation/jobs/' + jobId;
+    this.http.get<GeneratedRegion[]>(base + '/artifacts/regions').subscribe({
+      next: x => { this.regions.set(x); if (!this.editRegionId && x.length) this.selectRegion(x[0].id); },
+      error: () => this.regions.set([])
+    });
+    this.http.get<{ id: number; hex: string; name: string }[]>(base + '/artifacts/palette').subscribe({
+      next: x => this.palette.set(x), error: () => this.palette.set([])
+    });
+    this.loadAdjustments(jobId);
+  }
+  private loadAdjustments(jobId: string) {
+    const url = apiBase + '/admin/content-generation/jobs/' + jobId + '/adjustments';
+    this.http.get<RegionAdjustment[]>(url).subscribe({
+      next: x => { this.adjustments.set(x); if (this.editRegionId) this.selectRegion(this.editRegionId); },
+      error: () => this.adjustments.set([])
+    });
+  }
   private schedulePolling(jobs: GenerationJob[]) {
     if (this.pollHandle) clearTimeout(this.pollHandle);
     const active = jobs.some(job => {

@@ -29,3 +29,20 @@ public sealed record GenerationArtifactDto(
     byte[] Content,
     string ContentType,
     string FileName);
+
+public sealed record RegionAdjustmentRequest(
+    string? ColorHex,
+    string? SemanticTag,
+    string? SemanticRole,
+    bool? LabelVisibleAtBase,
+    string? Note);
+
+public sealed record RegionAdjustmentDto(
+    int RegionId,
+    string? ColorHex,
+    string? SemanticTag,
+    string? SemanticRole,
+    bool? LabelVisibleAtBase,
+    string? Note,
+    Guid UpdatedByUserId,
+    DateTime UpdatedAtUtc);

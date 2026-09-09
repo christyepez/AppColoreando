@@ -53,5 +53,20 @@ public sealed class ContentGenerationController(IContentGenerationService servic
         return artifact is null ? NotFound() : File(artifact.Content, artifact.ContentType);
     }
 
+    [HttpGet("jobs/{id:guid}/adjustments")]
+    public async Task<IActionResult> GetAdjustments(Guid id, CancellationToken ct) =>
+        Ok(await service.GetGenerationAdjustmentsAsync(id, ct));
+
+    [HttpPut("jobs/{id:guid}/adjustments/{regionId:int}")]
+    public async Task<IActionResult> UpsertAdjustment(Guid id, int regionId, RegionAdjustmentRequest request, CancellationToken ct) =>
+        Ok(await service.UpsertGenerationAdjustmentAsync(UserId(), id, regionId, request, ct));
+
+    [HttpDelete("jobs/{id:guid}/adjustments/{regionId:int}")]
+    public async Task<IActionResult> DeleteAdjustment(Guid id, int regionId, CancellationToken ct)
+    {
+        await service.DeleteGenerationAdjustmentAsync(UserId(), id, regionId, ct);
+        return NoContent();
+    }
+
     private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 }

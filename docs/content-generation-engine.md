@@ -97,3 +97,8 @@ The generation preset now changes the rendered result, not only catalog metadata
 The Admin Generation Studio is the operational entry point for the engine. Content managers can upload a source image, select a style preset and difficulty, queue generation, monitor status and inspect generated catalog/line-art/special previews without direct filesystem access.
 
 Generated previews are served only through the authenticated Admin API. The artifact reader accepts known logical kinds and resolves them from the manifest, preventing arbitrary path access while keeping storage implementation details outside Angular.
+
+## S25 Manual Fine Tuning
+Fine tuning is intentionally non-destructive. The processor output remains immutable and review changes are stored in `adjustments.json` beside the generation root manifest. Each override is keyed by `regionId` and may change color, semantic tag/role, base-label visibility, or add a reviewer note.
+
+The Admin Generation Studio reads generated `regions.json` and `palette.json`, applies authenticated CRUD operations to the overlay, and keeps every update attributable to the acting user. Runtime consumers must apply the overlay after loading the generated bundle, which is the integration target for S26.

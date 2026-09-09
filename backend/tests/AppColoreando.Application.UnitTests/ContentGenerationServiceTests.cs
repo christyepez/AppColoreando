@@ -57,9 +57,10 @@ public sealed class ContentGenerationServiceTests
         FakeJobRepository? jobs = null,
         FakeStorage? storage = null,
         FakeArtifactReader? artifacts = null,
+        FakeAdjustmentStore? adjustments = null,
         FakeQueue? queue = null) =>
         new(assets ?? new(), presets ?? new(), jobs ?? new(), storage ?? new(),
-            artifacts ?? new(), queue ?? new(), new FakeAuditRepository(), new FakeUnitOfWork());
+            artifacts ?? new(), adjustments ?? new(), queue ?? new(), new FakeAuditRepository(), new FakeUnitOfWork());
 
     private sealed class FakeAssetRepository(params SourceAsset[] seed) : ISourceAssetRepository
     {
@@ -96,6 +97,13 @@ public sealed class ContentGenerationServiceTests
     {
         public Task<GenerationArtifactDto?> ReadAsync(string resultManifestPath, string artifactKind, CancellationToken ct) =>
             Task.FromResult<GenerationArtifactDto?>(new([1, 2, 3], "image/webp", "preview.webp"));
+    }
+
+    private sealed class FakeAdjustmentStore : IGenerationAdjustmentStore
+    {
+        public Task<IReadOnlyCollection<RegionAdjustmentDto>> ListAsync(string path, CancellationToken ct) => Task.FromResult<IReadOnlyCollection<RegionAdjustmentDto>>([]);
+        public Task<RegionAdjustmentDto?> UpsertAsync(string path, int regionId, Guid userId, RegionAdjustmentRequest request, CancellationToken ct) => Task.FromResult<RegionAdjustmentDto?>(new(regionId, request.ColorHex, request.SemanticTag, request.SemanticRole, request.LabelVisibleAtBase, request.Note, userId, DateTime.UtcNow));
+        public Task<bool> DeleteAsync(string path, int regionId, CancellationToken ct) => Task.FromResult(true);
     }
 
     private sealed class FakeQueue : IGenerationJobQueue
