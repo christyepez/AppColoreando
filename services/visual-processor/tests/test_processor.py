@@ -128,3 +128,19 @@ def test_variant_options_scale_from_kids_to_master() -> None:
         v.max_colors for v in variants
     )
     assert variants[0].simplification_tolerance > variants[-1].simplification_tolerance
+
+
+def test_semantic_candidates_are_emitted(tmp_path: Path) -> None:
+    source = tmp_path / "duck.png"
+    output = tmp_path / "semantic"
+    _sample_image(source)
+    process_image(source, output, _options())
+
+    regions = json.loads((output / "regions.json").read_text(encoding="utf-8"))
+    tags = {region["semanticTag"] for region in regions}
+    roles = {region["semanticRole"] for region in regions}
+    assert "beak-candidate" in tags
+    assert "water" in tags
+    assert "environment" in roles
+    assert all(region["semanticTag"] for region in regions)
+    assert all(region["semanticRole"] for region in regions)

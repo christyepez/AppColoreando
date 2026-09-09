@@ -31,6 +31,8 @@ class Region:
     label_y: float
     bounds: tuple[float, float, float, float]
     svg_path: str
+    semantic_tag: str = "unclassified"
+    semantic_role: str = "detail"
 
 
 def _read_image(path: Path) -> np.ndarray:
@@ -166,6 +168,41 @@ def _friendly_color_name(value: str) -> str:
     if hue < 305:
         return "Violeta"
     return "Magenta"
+
+
+def _semantic_for_region(region: Region, image_shape: tuple[int, int], color_hex: str) -> tuple[str, str]:
+    height, width = image_shape
+    area_ratio = region.area / max(1, height * width)
+    x, y, w, h = region.bounds
+    aspect = w / max(h, 1e-6)
+    blue, green, red = _hex_to_bgr(color_hex)
+    hsv = cv2.cvtColor(np.uint8([[[blue, green, red]]]), cv2.COLOR_BGR2HSV)[0, 0]
+    hue = float(hsv[0]) * 2.0
+    saturation = float(hsv[1]) / 255.0
+    brightness = float(hsv[2]) / 255.0
+    touches_border = x < 0.01 or y < 0.01 or x + w > 0.99 or y + h > 0.99
+    if brightness < 0.28 and area_ratio < 0.025 and 0.45 <= aspect <= 2.2:
+        return "eye-candidate", "subject-detail"
+    if (hue < 70 or hue >= 345) and saturation > 0.45 and area_ratio < 0.12 and aspect > 1.35 and region.label_x > 0.52:
+        return "beak-candidate", "subject-accent"
+    if 175 <= hue <= 250 and saturation > 0.18:
+        return ("water", "environment") if region.label_y >= 0.52 else ("sky", "environment")
+    if 70 <= hue <= 170 and saturation > 0.18:
+        return "foliage", "environment"
+    if touches_border and area_ratio > 0.18:
+        return "background", "background"
+    if area_ratio > 0.06:
+        return "subject", "subject"
+    if brightness < 0.35:
+        return "dark-detail", "subject-detail"
+    return "detail", "detail"
+
+
+def _assign_semantics(regions: list[Region], image_shape: tuple[int, int], palette: list[str]) -> None:
+    for region in regions:
+        tag, role = _semantic_for_region(region, image_shape, palette[region.color_id - 1])
+        region.semantic_tag = tag
+        region.semantic_role = role
 
 
 def _edge_aware_smooth_labels(labels: np.ndarray, lab: np.ndarray, sensitivity: float) -> np.ndarray:
@@ -372,6 +409,7 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
     labels = _merge_micro_regions(labels, centers, options)
     palette = _vivid_palette(centers, options.saturation_boost, options.contrast_boost)
     regions = _extract_regions(labels, options)
+    _assign_semantics(regions, labels.shape, palette)
     if not regions:
         raise ValueError("NO_PLAYABLE_REGIONS")
 
@@ -394,6 +432,8 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
         {
             "id": region.id,
             "colorId": region.color_id,
+            "semanticTag": region.semantic_tag,
+            "semanticRole": region.semantic_role,
             "area": region.area,
             "svgPath": region.svg_path,
             "labelX": round(region.label_x, 6),
@@ -413,6 +453,10 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
 
     image_area = labels.shape[0] * labels.shape[1]
     playable_area = sum(region.area for region in regions)
+    semantic_counts = {
+        tag: sum(1 for region in regions if region.semantic_tag == tag)
+        for tag in sorted({region.semantic_tag for region in regions})
+    }
     qa = {
         "regionCount": len(regions),
         "colorCount": len(palette),
@@ -421,6 +465,7 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
         "minimumPaletteDeltaE": _minimum_palette_delta_e(centers),
         "microRegionThreshold": _micro_region_threshold(labels.shape, options),
         "difficulty": options.difficulty,
+        "semanticCounts": semantic_counts,
     }
     manifest = {
         "schemaVersion": "2.0",

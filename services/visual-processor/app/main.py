@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from app.processor import ProcessorOptions, process_image, process_variants
 
-app = FastAPI(title="AppColoreando Visual Processor", version="0.3.0")
+app = FastAPI(title="AppColoreando Visual Processor", version="0.4.0")
 OUTPUT_ROOT = Path("/content-data/generation-jobs")
 
 
@@ -25,7 +25,7 @@ class ProcessRequest(BaseModel):
     generateVariants: bool = True
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "healthy", "engine": "s19-difficulty-variant-generator"}
+    return {"status": "healthy", "engine": "s20-semantic-region-intelligence"}
 
 
 @app.post("/process")

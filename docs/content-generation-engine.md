@@ -60,6 +60,18 @@ Labels are smoothed only away from detected edges, preserving important object b
 
 The same synthetic animal source produced 4 regions in Kids and 6 in Detailed with 100% playable coverage, demonstrating that difficulty now changes topology rather than only metadata.
 
-## S19 next
+## S19 Difficulty Generator
 
-S19 will formalize the Difficulty Generator: generate Kids, Easy, Normal, Detailed and Master variants from one source asset in a single job, persist variant manifests, compare QA across variants and prepare the catalog/mobile contracts for selecting a generated variant.
+S19 generates Kids, Easy, Normal, Detailed and Master variants from one source asset in a single processor job. Each variant receives its own schema 2.0 playable bundle while a schema 2.1 root manifest indexes all five variants, their QA metrics and the primary difficulty selected by the Generation Job.
+
+Difficulty derivation adjusts target region count, color capacity, contour simplification and edge sensitivity. The .NET Visual Processor request enables variant generation by default without requiring another persistence migration.
+
+## S20 Semantic Region Intelligence
+
+S20 adds deterministic semantic candidates to every generated region. Geometry, location and source-derived color are used to classify broad roles such as background, subject, subject-detail and environment, with useful candidates including beak, eye, water, sky, foliage and dark detail. These tags improve future merge rules and QA while remaining explicitly heuristic until a vision model is introduced.
+
+Generated `regions.json` records `semanticTag` and `semanticRole`; QA records semantic tag counts per variant. The semantic layer is designed so a future AI vision adapter can replace or enrich heuristics without changing the mobile bundle shape.
+
+## S21 next
+
+S21 will harden number placement and readability for dense artworks: label-safe regions, zoom-aware visibility metadata, minimum inscribed radius and fallback anchors for narrow shapes.
