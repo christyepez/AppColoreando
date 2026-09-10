@@ -73,3 +73,11 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Publication-store tests cover accepted and rejected QA thresholds.
 - Docker shared-content permissions are initialized for the non-root runtime before API/Worker/Processor startup.
 - Validation: Visual Processor 10/10 tests PASS; backend Release 0 warnings/0 errors; backend 26/26 tests PASS.
+
+## S29 — AI Assisted Generation — Complete
+- Optional provider-neutral semantic hints use normalized coordinates and apply across all generated difficulty variants.
+- High-confidence hints (>= 0.75) can override S20 heuristic semantics; low-confidence hints are ignored.
+- Every region records `semanticSource` and `semanticConfidence` for traceability.
+- No external AI/model dependency is required; deterministic local generation remains the fallback.
+- Visual Processor API validates hint coordinates, roles, tags, confidence and provider metadata.
+- Validation: Visual Processor 12/12 tests PASS; .NET Release build 0 warnings/0 errors; backend 26/26 tests PASS; `git diff --check` PASS.

@@ -20,6 +20,7 @@ class ProcessorOptions:
     contrast_boost: float
     difficulty: str = "Normal"
     style_code: str = "natural"
+    semantic_hints: tuple[dict, ...] = ()
 
 
 @dataclass
@@ -38,6 +39,8 @@ class Region:
     label_min_zoom: float = 1.0
     label_font_size: float = 0.022
     label_visible_at_base: bool = True
+    semantic_source: str = "heuristic"
+    semantic_confidence: float = 0.55
 
 
 def _read_image(path: Path) -> np.ndarray:
@@ -229,11 +232,30 @@ def _semantic_for_region(region: Region, image_shape: tuple[int, int], color_hex
     return "detail", "detail"
 
 
-def _assign_semantics(regions: list[Region], image_shape: tuple[int, int], palette: list[str]) -> None:
+def _assign_semantics(regions: list[Region], image_shape: tuple[int, int], palette: list[str], hints: tuple[dict, ...] = ()) -> None:
     for region in regions:
         tag, role = _semantic_for_region(region, image_shape, palette[region.color_id - 1])
         region.semantic_tag = tag
         region.semantic_role = role
+        region.semantic_source = "heuristic"
+        region.semantic_confidence = 0.55
+    _apply_semantic_hints(regions, hints)
+
+
+def _apply_semantic_hints(regions: list[Region], hints: tuple[dict, ...]) -> None:
+    for hint in hints:
+        confidence = float(hint.get("confidence", 0.0))
+        if confidence < 0.75:
+            continue
+        x = float(hint.get("x", -1.0)); y = float(hint.get("y", -1.0))
+        candidates = [r for r in regions if r.bounds[0] <= x <= r.bounds[0] + r.bounds[2] and r.bounds[1] <= y <= r.bounds[1] + r.bounds[3]]
+        target = min(candidates or regions, key=lambda r: (r.label_x - x) ** 2 + (r.label_y - y) ** 2)
+        if (target.label_x - x) ** 2 + (target.label_y - y) ** 2 > 0.09:
+            continue
+        target.semantic_tag = str(hint.get("tag") or target.semantic_tag)[:64]
+        target.semantic_role = str(hint.get("role") or target.semantic_role)[:64]
+        target.semantic_source = str(hint.get("provider") or "external-ai")[:64]
+        target.semantic_confidence = min(1.0, max(0.0, confidence))
 
 
 def _edge_aware_smooth_labels(labels: np.ndarray, lab: np.ndarray, sensitivity: float) -> np.ndarray:
@@ -506,7 +528,7 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
     palette = _vivid_palette(centers, options.saturation_boost, options.contrast_boost)
     palette = _apply_style_palette(palette, options.style_code)
     regions = _extract_regions(labels, options)
-    _assign_semantics(regions, labels.shape, palette)
+    _assign_semantics(regions, labels.shape, palette, options.semantic_hints)
     if not regions:
         raise ValueError("NO_PLAYABLE_REGIONS")
 
@@ -536,6 +558,8 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
             "colorId": region.color_id,
             "semanticTag": region.semantic_tag,
             "semanticRole": region.semantic_role,
+            "semanticSource": region.semantic_source,
+            "semanticConfidence": round(region.semantic_confidence, 3),
             "area": region.area,
             "svgPath": region.svg_path,
             "labelX": round(region.label_x, 6),
@@ -664,6 +688,7 @@ def _variant_options(base: ProcessorOptions, difficulty: str) -> ProcessorOption
         contrast_boost=base.contrast_boost,
         difficulty=difficulty,
         style_code=base.style_code,
+        semantic_hints=base.semantic_hints,
     )
 
 

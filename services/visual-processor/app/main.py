@@ -2,12 +2,21 @@ from pathlib import Path
 from uuid import UUID
 
 from fastapi import FastAPI
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.processor import ProcessorOptions, process_image, process_variants
 
-app = FastAPI(title="AppColoreando Visual Processor", version="0.7.0")
+app = FastAPI(title="AppColoreando Visual Processor", version="0.9.0")
 OUTPUT_ROOT = Path("/content-data/generation-jobs")
+
+
+class SemanticHint(BaseModel):
+    x: float = Field(ge=0.0, le=1.0)
+    y: float = Field(ge=0.0, le=1.0)
+    tag: str = Field(min_length=1, max_length=64)
+    role: str = Field(min_length=1, max_length=64)
+    confidence: float = Field(ge=0.0, le=1.0)
+    provider: str = Field(default="external-ai", min_length=1, max_length=64)
 
 
 class ProcessRequest(BaseModel):
@@ -23,9 +32,10 @@ class ProcessRequest(BaseModel):
     saturationBoost: float
     contrastBoost: float
     generateVariants: bool = True
+    semanticHints: list[SemanticHint] = Field(default_factory=list)
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "healthy", "engine": "s23-special-effects-engine"}
+    return {"status": "healthy", "engine": "s29-ai-assisted-generation"}
 
 
 @app.post("/process")
@@ -50,6 +60,7 @@ def process(request: ProcessRequest) -> dict:
         contrast_boost=request.contrastBoost,
         difficulty=request.difficulty,
         style_code=request.presetCode,
+        semantic_hints=tuple(h.model_dump() for h in request.semanticHints),
     )
     try:
         job_output = OUTPUT_ROOT / str(request.jobId)

@@ -1,5 +1,6 @@
 ﻿from pathlib import Path
 import json
+from dataclasses import replace
 
 import cv2
 import numpy as np
@@ -215,3 +216,28 @@ def test_special_effects_emit_distinct_previews(tmp_path: Path) -> None:
         catalog = cv2.imread(str(output / "catalog-preview.webp"))
         assert special is not None and special.shape[:2] == (768, 768)
         assert catalog is not None and np.mean(cv2.absdiff(special, catalog)) > 0.1
+
+
+def test_high_confidence_semantic_hint_overrides_heuristic(tmp_path: Path) -> None:
+    source = tmp_path / "duck.png"
+    output = tmp_path / "hinted"
+    _sample_image(source)
+    options = replace(_options(), semantic_hints=({"x": 0.78, "y": 0.39, "tag": "beak", "role": "subject-accent", "confidence": 0.94, "provider": "vision-test"},))
+    process_image(source, output, options)
+    regions = json.loads((output / "regions.json").read_text(encoding="utf-8"))
+    hinted = [r for r in regions if r["semanticSource"] == "vision-test"]
+    assert hinted
+    assert hinted[0]["semanticTag"] == "beak"
+    assert hinted[0]["semanticRole"] == "subject-accent"
+    assert hinted[0]["semanticConfidence"] == 0.94
+
+
+def test_low_confidence_semantic_hint_keeps_heuristic(tmp_path: Path) -> None:
+    source = tmp_path / "duck.png"
+    output = tmp_path / "low-hint"
+    _sample_image(source)
+    options = replace(_options(), semantic_hints=({"x": 0.78, "y": 0.39, "tag": "forced", "role": "forced", "confidence": 0.40, "provider": "vision-test"},))
+    process_image(source, output, options)
+    regions = json.loads((output / "regions.json").read_text(encoding="utf-8"))
+    assert all(r["semanticSource"] == "heuristic" for r in regions)
+    assert all(r["semanticConfidence"] == 0.55 for r in regions)
