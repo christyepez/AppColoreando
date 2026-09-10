@@ -63,3 +63,13 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Existing rendering and S26 generated-bundle contracts remain unchanged.
 - Stress validation covers an artwork with 500 regions and verifies spatial candidate reduction plus path-cache reuse.
 - Validation: Flutter analyze PASS; Flutter 11/11 tests PASS; S26 GitHub AppColoreando CI and Mobile CI both SUCCESS.
+
+## S28 — Automatic QA — Complete
+
+- Visual Processor emits a deterministic QA score from 0 to 100, a `publishable` flag, and structured quality issues.
+- QA checks cover playable coverage, palette separation, micro-regions, and number readability.
+- QA metadata is embedded in both the generated manifest and playable `bundle.json`.
+- Publication requires `qa.publishable=true` and `qa.score>=90`; missing legacy QA or failing scores are rejected.
+- Publication-store tests cover accepted and rejected QA thresholds.
+- Docker shared-content permissions are initialized for the non-root runtime before API/Worker/Processor startup.
+- Validation: Visual Processor 10/10 tests PASS; backend Release 0 warnings/0 errors; backend 26/26 tests PASS.

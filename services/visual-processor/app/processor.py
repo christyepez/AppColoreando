@@ -563,18 +563,9 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
         tag: sum(1 for region in regions if region.semantic_tag == tag)
         for tag in sorted({region.semantic_tag for region in regions})
     }
-    qa = {
-        "regionCount": len(regions),
-        "colorCount": len(palette),
-        "playableCoverage": round(min(1.0, playable_area / image_area), 4),
-        "averageRegionArea": round(playable_area / len(regions), 2),
-        "minimumPaletteDeltaE": _minimum_palette_delta_e(centers),
-        "microRegionThreshold": _micro_region_threshold(labels.shape, options),
-        "difficulty": options.difficulty,
-        "semanticCounts": semantic_counts,
-        "labelsVisibleAtBase": sum(1 for region in regions if region.label_visible_at_base),
-        "labelsRequiringZoom": sum(1 for region in regions if not region.label_visible_at_base),
-    }
+    qa = _build_qa_report(
+        regions, centers, labels.shape, options, playable_area, image_area, semantic_counts
+    )
     playable_bundle = {
         "schemaVersion": "2.2",
         "width": int(labels.shape[1]),
@@ -585,6 +576,7 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
         "regions": region_payload,
         "adjustments": [],
         "effect": _style_effect_metadata(options.style_code),
+        "qa": qa,
     }
     bundle_path = output_dir / "bundle.json"
     bundle_path.write_text(json.dumps(playable_bundle, indent=2), encoding="utf-8")
@@ -614,6 +606,40 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
         "regionCount": len(regions),
         "colorCount": len(palette),
         "qa": qa,
+    }
+
+
+def _build_qa_report(regions, centers, shape, options, playable_area, image_area, semantic_counts):
+    coverage = min(1.0, playable_area / max(1, image_area))
+    minimum_delta = _minimum_palette_delta_e(centers)
+    micro_threshold = _micro_region_threshold(shape, options)
+    tiny_count = sum(1 for region in regions if region.area < micro_threshold)
+    hidden_count = sum(1 for region in regions if not region.label_visible_at_base)
+    tiny_ratio = tiny_count / max(1, len(regions))
+    hidden_ratio = hidden_count / max(1, len(regions))
+    issues = []
+    score = 100
+    if coverage < 0.98:
+        score -= min(40, round((0.98 - coverage) * 200))
+        issues.append({"severity": "Error", "code": "QA_COVERAGE", "message": f"Playable coverage is {coverage:.2%}."})
+    if minimum_delta < 6.0:
+        score -= 12
+        issues.append({"severity": "Warning", "code": "QA_PALETTE_DELTA", "message": f"Minimum palette Delta-E is {minimum_delta:.2f}."})
+    if tiny_ratio > 0.15:
+        score -= 12
+        issues.append({"severity": "Warning", "code": "QA_MICRO_REGIONS", "message": f"Micro-region ratio is {tiny_ratio:.2%}."})
+    if hidden_ratio > 0.50:
+        score -= 8
+        issues.append({"severity": "Warning", "code": "QA_LABEL_READABILITY", "message": f"Hidden label ratio is {hidden_ratio:.2%}."})
+    score = max(0, min(100, score))
+    return {
+        "score": score, "publishable": score >= 90 and not any(x["severity"] == "Error" for x in issues),
+        "issues": issues, "regionCount": len(regions), "colorCount": len(centers),
+        "playableCoverage": round(coverage, 4), "averageRegionArea": round(playable_area / max(1, len(regions)), 2),
+        "minimumPaletteDeltaE": minimum_delta, "microRegionThreshold": micro_threshold,
+        "difficulty": options.difficulty, "semanticCounts": semantic_counts,
+        "labelsVisibleAtBase": len(regions) - hidden_count, "labelsRequiringZoom": hidden_count,
+        "tinyRegionCount": tiny_count,
     }
 
 

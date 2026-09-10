@@ -5,7 +5,7 @@ services:
       POSTGRES_DB: appcoloreando
       POSTGRES_USER: appcoloreando
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports: ["5432:5432"]
+    ports: ["127.0.0.1:5432:5432"]
     volumes: [postgres_data:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U appcoloreando -d appcoloreando"]
@@ -15,11 +15,11 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports: ["6379:6379"]
+    ports: ["127.0.0.1:6379:6379"]
 
   rabbitmq:
     image: rabbitmq:4-management-alpine
-    ports: ["5672:5672", "15672:15672"]
+    ports: ["127.0.0.1:5672:5672", "127.0.0.1:15672:15672"]
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-appcoloreando}
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
@@ -35,7 +35,7 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-appcoloreando}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    ports: ["9000:9000", "9001:9001"]
+    ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
     volumes: [minio_data:/data]
 
   content-init:
@@ -135,12 +135,12 @@ services:
     image: prom/prometheus:latest
     volumes:
       - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-    ports: ["9090:9090"]
+    ports: ["127.0.0.1:9090:9090"]
     depends_on: [api]
 
   grafana:
     image: grafana/grafana-oss:latest
-    ports: ["3000:3000"]
+    ports: ["127.0.0.1:3000:3000"]
     volumes: [grafana_data:/var/lib/grafana]
     depends_on: [prometheus]
 

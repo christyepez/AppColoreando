@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using AppColoreando.Application.Contracts;
 using AppColoreando.Infrastructure.ContentGeneration;
 using Microsoft.Extensions.Configuration;
@@ -82,6 +83,28 @@ public sealed class GenerationPublicationStoreTests
         }
     }
 
+    [Fact]
+    public async Task Materialize_rejects_bundle_below_automatic_qa_threshold()
+    {
+        var root = CreateTempDirectory();
+        var published = CreateTempDirectory();
+        try
+        {
+            var manifest = await CreateBundleAsync(root);
+            var primary = Path.Combine(root, "variants", "normal", "manifest.json");
+            var json = JsonNode.Parse(await File.ReadAllTextAsync(primary))!.AsObject();
+            json["qa"] = JsonSerializer.SerializeToNode(new { score = 89, publishable = false });
+            await File.WriteAllTextAsync(primary, json.ToJsonString());
+            var result = await CreateStore(published).MaterializeAsync(Guid.NewGuid(), manifest, [], CancellationToken.None);
+            Assert.Null(result);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+            Directory.Delete(published, recursive: true);
+        }
+    }
+
     private static FileSystemGenerationPublicationStore CreateStore(string root)
     {
         var configuration = new ConfigurationBuilder()
@@ -112,7 +135,8 @@ public sealed class GenerationPublicationStoreTests
         await File.WriteAllTextAsync(primaryManifest, JsonSerializer.Serialize(new
         {
             bundlePath,
-            thumbnailPath
+            thumbnailPath,
+            qa = new { score = 96, publishable = true, issues = Array.Empty<object>() }
         }));
         var rootManifest = Path.Combine(root, "manifest.json");
         await File.WriteAllTextAsync(rootManifest, JsonSerializer.Serialize(new

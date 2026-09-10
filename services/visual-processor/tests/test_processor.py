@@ -57,11 +57,16 @@ def test_process_image_creates_playable_bundle(tmp_path: Path) -> None:
     assert manifest["schemaVersion"] == "2.0"
     assert manifest["qa"]["regionCount"] == len(regions)
     assert 0.0 < manifest["qa"]["playableCoverage"] <= 1.0
+    assert 0 <= manifest["qa"]["score"] <= 100
+    assert isinstance(manifest["qa"]["publishable"], bool)
+    assert isinstance(manifest["qa"]["issues"], list)
+    assert manifest["qa"]["publishable"] == (manifest["qa"]["score"] >= 90 and not any(x["severity"] == "Error" for x in manifest["qa"]["issues"]))
     bundle = json.loads((output / "bundle.json").read_text(encoding="utf-8"))
     assert bundle["schemaVersion"] == "2.2"
     assert bundle["regions"] == regions
     assert bundle["palette"] == palette
     assert bundle["adjustments"] == []
+    assert bundle["qa"] == manifest["qa"]
 
 
 def test_process_image_is_deterministic(tmp_path: Path) -> None:

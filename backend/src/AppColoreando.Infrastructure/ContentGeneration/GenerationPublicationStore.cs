@@ -25,6 +25,7 @@ public sealed class FileSystemGenerationPublicationStore(IConfiguration configur
         if (!IsWithin(generationRoot, primaryManifest) || !File.Exists(primaryManifest)) return null;
         await using var manifestStream = File.OpenRead(primaryManifest);
         using var manifest = await JsonDocument.ParseAsync(manifestStream, cancellationToken: ct);
+        if (!PassesAutomaticQa(manifest.RootElement)) return null;
         if (!manifest.RootElement.TryGetProperty("bundlePath", out var bundleNode) ||
             !manifest.RootElement.TryGetProperty("thumbnailPath", out var thumbNode))
             return null;
@@ -117,6 +118,14 @@ public sealed class FileSystemGenerationPublicationStore(IConfiguration configur
             ["name"] = "Manual override"
         });
         return nextId;
+    }
+
+    private static bool PassesAutomaticQa(JsonElement manifest)
+    {
+        if (!manifest.TryGetProperty("qa", out var qa)) return false;
+        if (!qa.TryGetProperty("score", out var scoreNode) || !scoreNode.TryGetInt32(out var score)) return false;
+        if (!qa.TryGetProperty("publishable", out var publishableNode)) return false;
+        return publishableNode.ValueKind == JsonValueKind.True && score >= 90;
     }
 
     private static async Task<string> ResolvePrimaryManifestAsync(
