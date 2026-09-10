@@ -1,0 +1,100 @@
+name: Docker Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Docker image tag shared by all AppColoreando services
+        required: true
+        default: s30
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: vars
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "sha_tag=sha-${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push API
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/src/AppColoreando.Api/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/appcoloreando-api:${{ steps.vars.outputs.tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/appcoloreando-api:${{ steps.vars.outputs.sha_tag }}
+
+      - name: Build and push Worker
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/src/AppColoreando.Worker/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/appcoloreando-worker:${{ steps.vars.outputs.tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/appcoloreando-worker:${{ steps.vars.outputs.sha_tag }}
+
+      - name: Build and push Visual Processor
+        uses: docker/build-push-action@v6
+        with:
+          context: services/visual-processor
+          file: services/visual-processor/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/appcoloreando-visual-processor:${{ steps.vars.outputs.tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/appcoloreando-visual-processor:${{ steps.vars.outputs.sha_tag }}
+
+      - name: Build and push Admin
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/admin
+          file: apps/admin/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/appcoloreando-admin:${{ steps.vars.outputs.tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/appcoloreando-admin:${{ steps.vars.outputs.sha_tag }}
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Build Flutter Web
+        working-directory: apps/mobile
+        run: |
+          flutter pub get
+          flutter build web --release
+
+      - name: Build and push Flutter Web
+        uses: docker/build-push-action@v6
+        with:
+          context: apps/mobile
+          file: apps/mobile/Dockerfile.web
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/appcoloreando-web:${{ steps.vars.outputs.tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/appcoloreando-web:${{ steps.vars.outputs.sha_tag }}

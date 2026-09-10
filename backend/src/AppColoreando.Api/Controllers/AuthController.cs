@@ -21,7 +21,24 @@ public sealed class AuthController(IAuthService service) : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> Login(LoginRequest request, CancellationToken ct)
     {
-        var result = await service.LoginAsync(request, ct);
+        var result = await service.LoginAsync(request, HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
         return result is null ? Unauthorized() : Ok(result);
+    }
+
+    [HttpPost("refresh")]
+    [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> Refresh(RefreshTokenRequest request, CancellationToken ct)
+    {
+        var result = await service.RefreshAsync(request, ct);
+        return result is null ? Unauthorized() : Ok(result);
+    }
+
+    [HttpPost("logout")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    public async Task<IActionResult> Logout(RevokeTokenRequest request, CancellationToken ct)
+    {
+        await service.LogoutAsync(request, ct);
+        return NoContent();
     }
 }
