@@ -55,3 +55,11 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Local Docker environment `appcoloreando-dev` validated with API/Admin/Web/Processor/RabbitMQ/MinIO/Prometheus/Grafana endpoints healthy.
 - End-to-end smoke PASS: login → upload → queue → worker → processor → PreviewReady → publish → public bundle + thumbnail.
 - Validation: .NET Release 0 warnings/0 errors; backend 25/25 tests PASS; Flutter analyze PASS; Flutter 9/9 tests PASS; Flutter Web Release PASS; Visual Processor 10/10 PASS; `git diff --check` PASS.
+
+## S27 — Mobile Runtime Performance — Complete
+- `DemoRegion` caches normalized and scaled `Path` geometry, avoiding repeated SVG/path reconstruction during hit-test and repaint.
+- `ArtworkSpatialIndex` partitions normalized artwork space and narrows hit-test candidates before precise `Path.contains` checks.
+- Coloring repaints now use an explicit `paintRevision`, fixing same-length completed-set mutation edge cases while avoiding unnecessary redraws.
+- Existing rendering and S26 generated-bundle contracts remain unchanged.
+- Stress validation covers an artwork with 500 regions and verifies spatial candidate reduction plus path-cache reuse.
+- Validation: Flutter analyze PASS; Flutter 11/11 tests PASS; S26 GitHub AppColoreando CI and Mobile CI both SUCCESS.

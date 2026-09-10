@@ -18,6 +18,7 @@ class _ColoringPageState extends ConsumerState<ColoringPage> {
   int? highlightedRegionId;
   Set<int> completed = {};
   int? lastCompleted;
+  int _paintRevision = 0;
   Timer? _saveDebounce;
   DemoArtwork? _artwork;
 
@@ -76,6 +77,7 @@ class _ColoringPageState extends ConsumerState<ColoringPage> {
           IconButton(tooltip: 'Deshacer', icon: const Icon(Icons.undo_rounded), onPressed: lastCompleted == null ? null : () {
             setState(() {
               completed.remove(lastCompleted);
+              _paintRevision++;
               lastCompleted = null;
             });
             _scheduleSave();
@@ -109,7 +111,7 @@ class _ColoringPageState extends ConsumerState<ColoringPage> {
                       child: LayoutBuilder(builder: (context, constraints) => GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTapUp: (details) => _tap(details.localPosition, Size(constraints.maxWidth, constraints.maxHeight), artwork),
-                        child: RepaintBoundary(child: CustomPaint(painter: ColoringPainter(artwork: artwork, selectedColorId: selectedColorId, completedRegionIds: completed, highlightedRegionId: highlightedRegionId))),
+                        child: RepaintBoundary(child: CustomPaint(painter: ColoringPainter(artwork: artwork, selectedColorId: selectedColorId, completedRegionIds: completed, highlightedRegionId: highlightedRegionId, paintRevision: _paintRevision))),
                       )),
                     ),
                   ),
@@ -182,6 +184,7 @@ class _ColoringPageState extends ConsumerState<ColoringPage> {
     }
     setState(() {
       completed = {...completed, region.id};
+      _paintRevision++;
       lastCompleted = region.id;
       highlightedRegionId = null;
     });
@@ -189,20 +192,47 @@ class _ColoringPageState extends ConsumerState<ColoringPage> {
   }
 }
 
+final Expando<ArtworkSpatialIndex> _spatialIndexCache = Expando<ArtworkSpatialIndex>();
+
 DemoRegion? hitTestRegion(DemoArtwork artwork, Offset normalizedPoint) {
   if (normalizedPoint.dx < 0 || normalizedPoint.dx > 1 || normalizedPoint.dy < 0 || normalizedPoint.dy > 1) return null;
-  for (final region in artwork.regions.reversed) {
+  final index = _spatialIndexCache[artwork] ??= ArtworkSpatialIndex(artwork);
+  for (final region in index.candidates(normalizedPoint).reversed) {
     if (region.contains(normalizedPoint)) return region;
   }
   return null;
 }
 
+class ArtworkSpatialIndex {
+  ArtworkSpatialIndex(DemoArtwork artwork) : divisions = math.max(4, math.sqrt(artwork.regions.length).ceil()) {
+    for (final region in artwork.regions) {
+      final minX = (region.rect.left * divisions).floor().clamp(0, divisions - 1);
+      final maxX = (region.rect.right * divisions).floor().clamp(0, divisions - 1);
+      final minY = (region.rect.top * divisions).floor().clamp(0, divisions - 1);
+      final maxY = (region.rect.bottom * divisions).floor().clamp(0, divisions - 1);
+      for (var y = minY; y <= maxY; y++) {
+        for (var x = minX; x <= maxX; x++) {
+          (_cells[y * divisions + x] ??= <DemoRegion>[]).add(region);
+        }
+      }
+    }
+  }
+  final int divisions;
+  final Map<int, List<DemoRegion>> _cells = {};
+  List<DemoRegion> candidates(Offset point) {
+    final x = (point.dx * divisions).floor().clamp(0, divisions - 1);
+    final y = (point.dy * divisions).floor().clamp(0, divisions - 1);
+    return _cells[y * divisions + x] ?? const <DemoRegion>[];
+  }
+}
+
 class ColoringPainter extends CustomPainter {
-  ColoringPainter({required this.artwork, required this.selectedColorId, required this.completedRegionIds, required this.highlightedRegionId});
+  ColoringPainter({required this.artwork, required this.selectedColorId, required this.completedRegionIds, required this.highlightedRegionId, required this.paintRevision});
   final DemoArtwork artwork;
   final int selectedColorId;
   final Set<int> completedRegionIds;
   final int? highlightedRegionId;
+  final int paintRevision;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -237,5 +267,5 @@ class ColoringPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant ColoringPainter oldDelegate) => oldDelegate.selectedColorId != selectedColorId || oldDelegate.highlightedRegionId != highlightedRegionId || oldDelegate.completedRegionIds.length != completedRegionIds.length;
+  bool shouldRepaint(covariant ColoringPainter oldDelegate) => oldDelegate.artwork != artwork || oldDelegate.selectedColorId != selectedColorId || oldDelegate.highlightedRegionId != highlightedRegionId || oldDelegate.paintRevision != paintRevision;
 }

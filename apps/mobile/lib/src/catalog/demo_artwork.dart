@@ -133,8 +133,21 @@ class DemoRegion {
   final RegionPathBuilder? pathBuilder;
   final Offset? labelOffset;
   final bool labelVisibleAtBase;
+  Path? _normalizedPathCache;
+  Size? _scaledPathSize;
+  Path? _scaledPathCache;
 
   Path path(Size size) {
+    if (size == const Size(1, 1) && _normalizedPathCache != null) return _normalizedPathCache!;
+    if (_scaledPathSize == size && _scaledPathCache != null) return _scaledPathCache!;
+    final built = _buildPath(size);
+    if (size == const Size(1, 1)) _normalizedPathCache = built;
+    _scaledPathSize = size;
+    _scaledPathCache = built;
+    return built;
+  }
+
+  Path _buildPath(Size size) {
     if (pathBuilder != null) return pathBuilder!(size);
     final scaled = points.map((p) => Offset(p.dx * size.width, p.dy * size.height)).toList();
     final result = Path();
