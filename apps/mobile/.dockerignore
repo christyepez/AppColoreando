@@ -1,0 +1,11 @@
+.dart_tool
+android
+ios
+linux
+macos
+windows
+test
+*.log
+build/*
+!build/web/
+!build/web/**

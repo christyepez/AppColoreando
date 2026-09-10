@@ -81,3 +81,13 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - No external AI/model dependency is required; deterministic local generation remains the fallback.
 - Visual Processor API validates hint coordinates, roles, tags, confidence and provider metadata.
 - Validation: Visual Processor 12/12 tests PASS; .NET Release build 0 warnings/0 errors; backend 26/26 tests PASS; `git diff --check` PASS.
+
+## S30 — Multi-Environment Docker Hub Deployment — Complete
+- Productive container images defined for API, Worker, Visual Processor, Angular Admin and Flutter Web.
+- `docker-compose.hub.yml` runs the same `APPCOLOREANDO_VERSION` across workstations with isolated local data volumes.
+- `.env.hub.example` documents required local configuration while `.env.hub` is ignored by Git.
+- `hub-up.ps1` / `hub-down.ps1` support Windows PowerShell 5.x and preserve volumes on shutdown.
+- GitHub Actions Docker Publish workflow emits a shared release tag plus immutable `sha-<12>` tags for all five images.
+- Admin/Web production images smoke-tested over HTTP; API/Worker/Processor images build successfully.
+- `actionlint`, Docker Compose config and `git diff --check` PASS.
+- External requirement: Docker Hub credentials/repository access must be configured before remote push/pull of private application images.
