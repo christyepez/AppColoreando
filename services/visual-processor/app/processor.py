@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import json
 import math
+import shutil
 
 import cv2
 import numpy as np
@@ -41,6 +42,7 @@ class Region:
     label_visible_at_base: bool = True
     semantic_source: str = "heuristic"
     semantic_confidence: float = 0.55
+    label_priority: float = 0.0
 
 
 def _read_image(path: Path) -> np.ndarray:
@@ -63,6 +65,17 @@ def _resize_for_processing(image: np.ndarray, max_side: int = 1024) -> np.ndarra
     return cv2.resize(image, target, interpolation=cv2.INTER_AREA)
 
 
+def _illustration_preprocess(image: np.ndarray, difficulty: str) -> np.ndarray:
+    code = difficulty.lower()
+    passes = {"kids": 3, "easy": 3, "normal": 2, "detailed": 1, "master": 1}.get(code, 2)
+    sigma_color = {"kids": 72, "easy": 64, "normal": 56, "detailed": 44, "master": 34}.get(code, 56)
+    result = image.copy()
+    for _ in range(passes):
+        result = cv2.bilateralFilter(result, 9, sigma_color, 48)
+    if code in {"kids", "easy", "normal"}:
+        result = cv2.medianBlur(result, 3)
+    return result
+
 def _preprocess(image: np.ndarray, edge_sensitivity: float) -> np.ndarray:
     diameter = max(5, int(7 + 8 * max(0.0, min(edge_sensitivity, 1.0))))
     if diameter % 2 == 0:
@@ -75,14 +88,69 @@ def _preprocess(image: np.ndarray, edge_sensitivity: float) -> np.ndarray:
     return cv2.merge((l, a, b))
 
 
-def _cluster_colors(lab: np.ndarray, color_count: int) -> tuple[np.ndarray, np.ndarray]:
+def _spatial_compactness(difficulty: str) -> float:
+    return {
+        "kids": 1.35,
+        "easy": 1.10,
+        "normal": 0.85,
+        "detailed": 0.58,
+        "master": 0.38,
+    }.get(difficulty.lower(), 0.85)
+
+
+def _foreground_likelihood(lab: np.ndarray) -> np.ndarray:
+    height, width = lab.shape[:2]
+    band = max(2, min(height, width) // 24)
+    border = np.concatenate((lab[:band].reshape(-1, 3), lab[-band:].reshape(-1, 3), lab[:, :band].reshape(-1, 3), lab[:, -band:].reshape(-1, 3)), axis=0).astype(np.float32)
+    background = np.median(border, axis=0)
+    distance = np.linalg.norm(lab.astype(np.float32) - background.reshape((1, 1, 3)), axis=2)
+    normalized = cv2.normalize(distance, None, 0.0, 1.0, cv2.NORM_MINMAX)
+    yy, xx = np.indices((height, width), dtype=np.float32)
+    cx = (xx - (width - 1) / 2.0) / max(1.0, width / 2.0)
+    cy = (yy - (height - 1) / 2.0) / max(1.0, height / 2.0)
+    center_prior = np.clip(1.0 - np.sqrt(cx * cx + cy * cy), 0.0, 1.0)
+    return np.clip(normalized * 0.78 + center_prior * 0.22, 0.0, 1.0).astype(np.float32)
+
+
+def _edge_strength(lab: np.ndarray) -> np.ndarray:
+    l = lab[:, :, 0].astype(np.float32)
+    gx = cv2.Sobel(l, cv2.CV_32F, 1, 0, ksize=3)
+    gy = cv2.Sobel(l, cv2.CV_32F, 0, 1, ksize=3)
+    return cv2.normalize(cv2.magnitude(gx, gy), None, 0.0, 1.0, cv2.NORM_MINMAX).astype(np.float32)
+
+def _cluster_colors(lab: np.ndarray, color_count: int, difficulty: str = "Normal") -> tuple[np.ndarray, np.ndarray]:
+    height, width = lab.shape[:2]
     pixels = lab.reshape((-1, 3)).astype(np.float32)
-    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 35, 0.35)
+
+    # Add normalized XY features so equal colors in distant objects do not
+    # collapse into one fragmented cluster. Coarser difficulties receive
+    # stronger spatial regularization; Master keeps more photographic detail.
+    yy, xx = np.indices((height, width), dtype=np.float32)
+    scale = 48.0 * _spatial_compactness(difficulty)
+    x_feature = (xx.reshape(-1, 1) / max(1.0, float(width - 1))) * scale
+    y_feature = (yy.reshape(-1, 1) / max(1.0, float(height - 1))) * scale
+    foreground = _foreground_likelihood(lab).reshape(-1, 1) * 26.0
+    edge = _edge_strength(lab).reshape(-1, 1) * 18.0
+    features = np.concatenate((pixels, x_feature, y_feature, foreground, edge), axis=1)
+
+    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.30)
     cv2.setRNGSeed(42)
-    _, labels, centers = cv2.kmeans(
-        pixels, color_count, None, criteria, 3, cv2.KMEANS_PP_CENTERS
+    _, raw_labels, _ = cv2.kmeans(
+        features, color_count, None, criteria, 3, cv2.KMEANS_PP_CENTERS
     )
-    return labels.reshape(lab.shape[:2]), centers.astype(np.uint8)
+    labels = raw_labels.reshape((height, width)).astype(np.int32)
+
+    # Palette centers must remain true LAB image colors, not LAB+XY feature
+    # centroids. Recompute each center from the original image pixels.
+    centers: list[np.ndarray] = []
+    flat_labels = labels.reshape(-1)
+    for cluster_id in range(color_count):
+        members = pixels[flat_labels == cluster_id]
+        if members.size == 0:
+            centers.append(np.array([128, 128, 128], dtype=np.uint8))
+        else:
+            centers.append(np.rint(np.mean(members, axis=0)).astype(np.uint8))
+    return labels, np.asarray(centers, dtype=np.uint8)
 
 
 def _opencv_lab_to_cie(value: np.ndarray) -> np.ndarray:
@@ -147,6 +215,18 @@ def _hex_from_bgr(value: np.ndarray) -> str:
     blue, green, red = [int(np.clip(x, 0, 255)) for x in value]
     return f"#{red:02X}{green:02X}{blue:02X}"
 
+
+def _harmonize_palette(palette: list[str], difficulty: str) -> list[str]:
+    result: list[str] = []
+    minimum_sat = {"kids": 0.42, "easy": 0.36, "normal": 0.30, "detailed": 0.24, "master": 0.20}.get(difficulty.lower(), 0.30)
+    for color in palette:
+        blue, green, red = _hex_to_bgr(color)
+        hsv = cv2.cvtColor(np.uint8([[[blue, green, red]]]), cv2.COLOR_BGR2HSV)[0, 0].astype(np.float32)
+        if hsv[2] > 48:
+            hsv[1] = max(hsv[1], minimum_sat * 255.0)
+        hsv[2] = np.clip(hsv[2], 34.0, 248.0)
+        result.append(_hex_from_bgr(cv2.cvtColor(np.uint8([[hsv]]), cv2.COLOR_HSV2BGR)[0, 0]))
+    return result
 
 def _apply_style_palette(palette: list[str], style_code: str) -> list[str]:
     style = style_code.lower()
@@ -373,6 +453,28 @@ def _bounds(contour: np.ndarray, width: int, height: int) -> tuple[float, float,
     return x / width, y / height, w / width, h / height
 
 
+def _clean_component_mask(component_mask: np.ndarray, options: ProcessorOptions) -> np.ndarray:
+    radius = {"kids": 2, "easy": 2, "normal": 1, "detailed": 1, "master": 0}.get(options.difficulty.lower(), 1)
+    if radius <= 0:
+        return component_mask
+    size = radius * 2 + 1
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (size, size))
+    cleaned = cv2.morphologyEx(component_mask, cv2.MORPH_CLOSE, kernel, iterations=1)
+    return cv2.morphologyEx(cleaned, cv2.MORPH_OPEN, kernel, iterations=1)
+
+
+def _contour_compactness(contour: np.ndarray) -> float:
+    area = max(1.0, float(cv2.contourArea(contour)))
+    perimeter = max(1.0, float(cv2.arcLength(contour, True)))
+    return float(4.0 * math.pi * area / (perimeter * perimeter))
+
+
+def _is_sliver_region(contour: np.ndarray, image_area: int) -> bool:
+    x, y, w, h = cv2.boundingRect(contour)
+    area = max(1.0, float(cv2.contourArea(contour)))
+    aspect = max(w, h) / max(1.0, float(min(w, h)))
+    return area / max(1, image_area) < 0.02 and (aspect > 10.0 or _contour_compactness(contour) < 0.035)
+
 def _extract_regions(labels: np.ndarray, options: ProcessorOptions) -> list[Region]:
     height, width = labels.shape
     image_area = width * height
@@ -461,6 +563,22 @@ def _square_preview(image: np.ndarray, size: int, margin_ratio: float = 0.04) ->
     return canvas
 
 
+def _resolve_style_code(image: np.ndarray, requested: str) -> str:
+    requested = (requested or "natural").lower()
+    if requested != "auto":
+        return requested
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    saturation = float(np.mean(hsv[:, :, 1])) / 255.0
+    brightness = float(np.mean(hsv[:, :, 2])) / 255.0
+    warm = float(np.mean(image[:, :, 2])) - float(np.mean(image[:, :, 0]))
+    if brightness < 0.42:
+        return "lumina"
+    if saturation > 0.48:
+        return "aura"
+    if warm > 18.0:
+        return "postal-viva"
+    return "natural"
+
 def _style_effect_metadata(style_code: str) -> dict:
     style = style_code.lower()
     names = {
@@ -519,14 +637,17 @@ def _write_svg(path: Path, regions: list[Region], palette: list[str], line_art: 
 
 def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions) -> dict:
     image = _resize_for_processing(_read_image(source_path))
+    image = _illustration_preprocess(image, options.difficulty)
     lab = _preprocess(image, options.edge_sensitivity)
     color_count = max(3, min(options.max_colors, 24))
-    labels, centers = _cluster_colors(lab, color_count)
+    labels, centers = _cluster_colors(lab, color_count, options.difficulty)
     labels, centers = _merge_similar_clusters(labels, centers, options.difficulty)
     labels = _edge_aware_smooth_labels(labels, lab, options.edge_sensitivity)
     labels = _merge_micro_regions(labels, centers, options)
+    resolved_style = _resolve_style_code(image, options.style_code)
     palette = _vivid_palette(centers, options.saturation_boost, options.contrast_boost)
-    palette = _apply_style_palette(palette, options.style_code)
+    palette = _harmonize_palette(palette, options.difficulty)
+    palette = _apply_style_palette(palette, resolved_style)
     regions = _extract_regions(labels, options)
     _assign_semantics(regions, labels.shape, palette, options.semantic_hints)
     if not regions:
@@ -535,7 +656,7 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
     output_dir.mkdir(parents=True, exist_ok=True)
     colored = _render_colored(labels, palette)
     line_art = _render_line_art(labels, regions)
-    special_preview = _render_style_preview(colored, line_art, options.style_code)
+    special_preview = _render_style_preview(colored, line_art, resolved_style)
     cv2.imwrite(str(output_dir / "preview-colored.png"), colored)
     cv2.imwrite(str(output_dir / "preview-lineart.png"), line_art)
     _write_webp(output_dir / "thumbnail.webp", _square_preview(colored, 512), 90)
@@ -568,6 +689,7 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
             "labelMinZoom": round(region.label_min_zoom, 2),
             "labelFontSize": round(region.label_font_size, 6),
             "labelVisibleAtBase": region.label_visible_at_base,
+            "labelPriority": region.label_priority,
             "bounds": {
                 "x": round(region.bounds[0], 6),
                 "y": round(region.bounds[1], 6),
@@ -595,11 +717,11 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
         "width": int(labels.shape[1]),
         "height": int(labels.shape[0]),
         "difficulty": options.difficulty,
-        "styleCode": options.style_code,
+        "styleCode": resolved_style,
         "palette": palette_payload,
         "regions": region_payload,
         "adjustments": [],
-        "effect": _style_effect_metadata(options.style_code),
+        "effect": _style_effect_metadata(resolved_style),
         "qa": qa,
     }
     bundle_path = output_dir / "bundle.json"
@@ -620,7 +742,7 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
         "catalogPreviewPath": str(output_dir / "catalog-preview.webp"),
         "lineArtWebpPath": str(output_dir / "lineart-preview.webp"),
         "specialPreviewPath": str(output_dir / "special-preview.webp"),
-        "effect": _style_effect_metadata(options.style_code),
+        "effect": _style_effect_metadata(resolved_style),
         "qa": qa,
     }
     manifest_path = output_dir / "manifest.json"
@@ -639,8 +761,13 @@ def _build_qa_report(regions, centers, shape, options, playable_area, image_area
     micro_threshold = _micro_region_threshold(shape, options)
     tiny_count = sum(1 for region in regions if region.area < micro_threshold)
     hidden_count = sum(1 for region in regions if not region.label_visible_at_base)
+    compactness_values = [_contour_compactness(region.contour) for region in regions]
+    average_compactness = float(np.mean(compactness_values)) if compactness_values else 0.0
+    low_compactness_count = sum(1 for value in compactness_values if value < 0.06)
+    subject_count = sum(1 for region in regions if region.semantic_role.startswith("subject"))
     tiny_ratio = tiny_count / max(1, len(regions))
     hidden_ratio = hidden_count / max(1, len(regions))
+    low_compactness_ratio = low_compactness_count / max(1, len(regions))
     issues = []
     score = 100
     if coverage < 0.98:
@@ -655,6 +782,9 @@ def _build_qa_report(regions, centers, shape, options, playable_area, image_area
     if hidden_ratio > 0.50:
         score -= 8
         issues.append({"severity": "Warning", "code": "QA_LABEL_READABILITY", "message": f"Hidden label ratio is {hidden_ratio:.2%}."})
+    if low_compactness_ratio > 0.12:
+        score -= 10
+        issues.append({"severity": "Warning", "code": "QA_CONTOUR_COMPLEXITY", "message": f"Low-compactness contour ratio is {low_compactness_ratio:.2%}."})
     score = max(0, min(100, score))
     return {
         "score": score, "publishable": score >= 90 and not any(x["severity"] == "Error" for x in issues),
@@ -664,6 +794,10 @@ def _build_qa_report(regions, centers, shape, options, playable_area, image_area
         "difficulty": options.difficulty, "semanticCounts": semantic_counts,
         "labelsVisibleAtBase": len(regions) - hidden_count, "labelsRequiringZoom": hidden_count,
         "tinyRegionCount": tiny_count,
+        "averageContourCompactness": round(average_compactness, 4),
+        "lowCompactnessRegionCount": low_compactness_count,
+        "playableLabelRatio": round((len(regions) - hidden_count) / max(1, len(regions)), 4),
+        "subjectRegionRatio": round(subject_count / max(1, len(regions)), 4),
     }
 
 
@@ -692,6 +826,35 @@ def _variant_options(base: ProcessorOptions, difficulty: str) -> ProcessorOption
     )
 
 
+def _repair_variant_options(options: ProcessorOptions, qa: dict) -> ProcessorOptions:
+    issues = {item.get("code") for item in qa.get("issues", [])}
+    colors = options.max_colors
+    target = options.target_regions
+    simplification = options.simplification_tolerance
+    edge = options.edge_sensitivity
+    if "QA_PALETTE_DELTA" in issues:
+        colors = max(4, colors - 2)
+    if "QA_MICRO_REGIONS" in issues or "QA_LABEL_READABILITY" in issues:
+        target = max(12, round(target * 0.82))
+        simplification = min(0.78, simplification + 0.08)
+    if "QA_CONTOUR_COMPLEXITY" in issues:
+        simplification = min(0.82, simplification + 0.10)
+        edge = max(0.25, edge - 0.08)
+    if "QA_COVERAGE" in issues:
+        target = max(12, round(target * 0.88))
+    return ProcessorOptions(
+        target_regions=target,
+        max_colors=colors,
+        simplification_tolerance=simplification,
+        edge_sensitivity=edge,
+        curve_smoothness=max(options.curve_smoothness, 0.72),
+        saturation_boost=options.saturation_boost,
+        contrast_boost=options.contrast_boost,
+        difficulty=options.difficulty,
+        style_code=options.style_code,
+        semantic_hints=options.semantic_hints,
+    )
+
 def process_variants(
     source_path: Path,
     output_dir: Path,
@@ -706,6 +869,18 @@ def process_variants(
         variant_dir = output_dir / "variants" / difficulty.lower()
         options = _variant_options(base_options, difficulty)
         result = process_image(source_path, variant_dir, options)
+        initial_score = int(result["qa"]["score"])
+        repair_attempted = not bool(result["qa"]["publishable"])
+        repaired = False
+        if repair_attempted:
+            repair_options = _repair_variant_options(options, result["qa"])
+            repair_dir = output_dir / "_repair" / difficulty.lower()
+            repair_result = process_image(source_path, repair_dir, repair_options)
+            if int(repair_result["qa"]["score"]) > initial_score:
+                shutil.rmtree(variant_dir, ignore_errors=True)
+                result = process_image(source_path, variant_dir, repair_options)
+                repaired = True
+            shutil.rmtree(repair_dir, ignore_errors=True)
         variants.append({
             "code": difficulty.lower(),
             "difficulty": difficulty,
@@ -713,6 +888,9 @@ def process_variants(
             "regionCount": result["regionCount"],
             "colorCount": result["colorCount"],
             "qa": result["qa"],
+            "autoRepairAttempted": repair_attempted,
+            "autoRepaired": repaired,
+            "initialQaScore": initial_score,
             "isPrimary": difficulty.lower() == primary_difficulty.lower(),
         })
 

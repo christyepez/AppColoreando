@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 import json
 from dataclasses import replace
 
@@ -6,8 +6,8 @@ import cv2
 import numpy as np
 
 from app.processor import (
-    ProcessorOptions, _friendly_color_name, _merge_similar_clusters,
-    _micro_region_threshold, process_image,
+    ProcessorOptions, _cluster_colors, _contour_compactness, _foreground_likelihood, _friendly_color_name, _harmonize_palette, _illustration_preprocess, _is_sliver_region, _merge_similar_clusters, _repair_variant_options, _resolve_style_code,
+    _micro_region_threshold, _spatial_compactness, process_image,
 )
 
 
@@ -241,3 +241,77 @@ def test_low_confidence_semantic_hint_keeps_heuristic(tmp_path: Path) -> None:
     regions = json.loads((output / "regions.json").read_text(encoding="utf-8"))
     assert all(r["semanticSource"] == "heuristic" for r in regions)
     assert all(r["semanticConfidence"] == 0.55 for r in regions)
+
+def test_spatial_compactness_scales_with_difficulty() -> None:
+    assert _spatial_compactness("Kids") > _spatial_compactness("Normal")
+    assert _spatial_compactness("Normal") > _spatial_compactness("Master")
+
+
+def test_spatial_color_clustering_is_deterministic() -> None:
+    bgr = np.zeros((96, 144, 3), dtype=np.uint8)
+    bgr[:, :48] = (40, 180, 230)
+    bgr[:, 48:96] = (180, 80, 45)
+    bgr[:, 96:] = (40, 180, 230)
+    lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
+
+    first_labels, first_centers = _cluster_colors(lab, 3, "Normal")
+    second_labels, second_centers = _cluster_colors(lab, 3, "Normal")
+
+    assert np.array_equal(first_labels, second_labels)
+    assert np.array_equal(first_centers, second_centers)
+    assert len(np.unique(first_labels)) == 3
+    assert first_labels[48, 20] != first_labels[48, 120]
+
+def test_foreground_likelihood_prefers_center_subject() -> None:
+    image = np.full((120, 120, 3), (220, 220, 220), dtype=np.uint8)
+    cv2.circle(image, (60, 60), 24, (30, 80, 210), -1)
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    likelihood = _foreground_likelihood(lab)
+    assert likelihood[60, 60] > likelihood[5, 5]
+    assert 0.0 <= float(likelihood.min()) <= float(likelihood.max()) <= 1.0
+
+
+def test_contour_quality_detects_thin_sliver() -> None:
+    contour = np.array([[[5, 5]], [[115, 5]], [[115, 7]], [[5, 7]]], dtype=np.int32)
+    assert _contour_compactness(contour) < 0.1
+    assert _is_sliver_region(contour, 120 * 120)
+
+def test_illustration_preprocess_reduces_noise() -> None:
+    rng = np.random.default_rng(7)
+    image = np.full((96, 96, 3), 128, dtype=np.uint8)
+    noise = rng.integers(-35, 36, size=image.shape, dtype=np.int16)
+    noisy = np.clip(image.astype(np.int16) + noise, 0, 255).astype(np.uint8)
+    processed = _illustration_preprocess(noisy, "Normal")
+    assert processed.shape == noisy.shape
+    assert float(np.std(processed.astype(np.float32))) < float(np.std(noisy.astype(np.float32)))
+
+
+def test_palette_harmonization_increases_muted_saturation() -> None:
+    muted = ["#9A948F"]
+    harmonized = _harmonize_palette(muted, "Kids")
+    before = cv2.cvtColor(np.uint8([[[143, 148, 154]]]), cv2.COLOR_BGR2HSV)[0, 0]
+    b, g, r = tuple(int(harmonized[0].lstrip("#")[i:i+2], 16) for i in (4, 2, 0))
+    after = cv2.cvtColor(np.uint8([[[b, g, r]]]), cv2.COLOR_BGR2HSV)[0, 0]
+    assert int(after[1]) >= int(before[1])
+
+
+def test_auto_style_resolves_deterministically() -> None:
+    dark = np.full((40, 40, 3), 60, dtype=np.uint8)
+    vivid = np.full((40, 40, 3), (20, 40, 220), dtype=np.uint8)
+    assert _resolve_style_code(dark, "auto") == "lumina"
+    assert _resolve_style_code(vivid, "auto") in {"aura", "postal-viva"}
+    assert _resolve_style_code(vivid, "natural") == "natural"
+
+
+def test_repair_options_reduce_problematic_complexity() -> None:
+    options = _options()
+    qa = {"issues": [
+        {"code": "QA_MICRO_REGIONS"},
+        {"code": "QA_PALETTE_DELTA"},
+        {"code": "QA_CONTOUR_COMPLEXITY"},
+    ]}
+    repaired = _repair_variant_options(options, qa)
+    assert repaired.target_regions < options.target_regions
+    assert repaired.max_colors < options.max_colors
+    assert repaired.simplification_tolerance > options.simplification_tolerance
+    assert repaired.edge_sensitivity < options.edge_sensitivity
