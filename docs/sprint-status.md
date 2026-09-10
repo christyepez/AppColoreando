@@ -81,13 +81,50 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - No external AI/model dependency is required; deterministic local generation remains the fallback.
 - Visual Processor API validates hint coordinates, roles, tags, confidence and provider metadata.
 - Validation: Visual Processor 12/12 tests PASS; .NET Release build 0 warnings/0 errors; backend 26/26 tests PASS; `git diff --check` PASS.
+## S30 — Natural Spatial Segmentation — Complete
+- LAB clustering now includes normalized XY spatial features to preserve local object coherence in photographic sources.
+- Spatial compactness scales by difficulty: Kids/Easy favor larger organic regions while Detailed/Master preserve more local detail.
+- Palette centers are recomputed from original LAB pixels after spatial clustering, so color fidelity is not contaminated by XY features.
+- Equal colors in distant objects may form independent playable regions, reducing fragmented cross-image blobs.
+- The algorithm remains deterministic and local; no new external model or service dependency is introduced.
+- Visual Processor health engine updated to `s30-natural-spatial-segmentation`.
+- Validation: Visual Processor 14/14 tests PASS.
+## S31 — Subject-Aware Segmentation — Complete
+- Foreground likelihood combines border-color distance with a conservative center prior.
+- Subject likelihood participates in clustering so main objects are less likely to dissolve into background-color regions.
+- Edge strength is included as a clustering feature to better preserve structural boundaries.
 
-## S30 — Multi-Environment Docker Hub Deployment — Complete
-- Productive container images defined for API, Worker, Visual Processor, Angular Admin and Flutter Web.
-- `docker-compose.hub.yml` runs the same `APPCOLOREANDO_VERSION` across workstations with isolated local data volumes.
-- `.env.hub.example` documents required local configuration while `.env.hub` is ignored by Git.
-- `hub-up.ps1` / `hub-down.ps1` support Windows PowerShell 5.x and preserve volumes on shutdown.
-- GitHub Actions Docker Publish workflow emits a shared release tag plus immutable `sha-<12>` tags for all five images.
-- Admin/Web production images smoke-tested over HTTP; API/Worker/Processor images build successfully.
-- `actionlint`, Docker Compose config and `git diff --check` PASS.
-- External requirement: Docker Hub credentials/repository access must be configured before remote push/pull of private application images.
+## S32 — Edge and Contour Intelligence — Complete
+- Component masks are cleaned with difficulty-aware elliptical morphology before vectorization.
+- Contour simplification adapts to compactness, preserving more geometry on irregular shapes and smoothing regular regions.
+- SVG generation remains deterministic and compatible with the existing mobile bundle contract.
+
+## S33 — Region Topology Guardrails — Complete
+- Thin/sliver playable regions are detected using area ratio, aspect ratio and contour compactness.
+- Non-playable slivers are excluded before bundle emission, reducing accidental taps and unreadable numbered zones.
+- Validation: Visual Processor 16/16 tests PASS.
+## S34 — Smart Palette Harmonization — Complete
+- Difficulty-aware saturation floors keep generated palettes vivid while preserving dark/light structure.
+- Harmonization runs before artistic style effects so presets remain predictable.
+
+## S35 — Number Placement V2 — Complete
+- Region labels now expose `labelPriority` based on safe-radius, area and center weighting.
+- Existing zoom/readability metadata remains backward compatible.
+
+## S36 — Photo to Illustration Preprocessing — Complete
+- Difficulty-aware bilateral/median stylization reduces photographic noise before segmentation.
+- Kids/Easy receive stronger abstraction while Detailed/Master retain more texture.
+
+## S37 — Automatic Artistic Style Routing — Complete
+- `presetCode=auto` deterministically selects Natural, Aura, Postal Viva or Lumina from image brightness, saturation and warmth.
+- Explicit presets still override automatic routing.
+
+## S38 — Generation Quality Scoring V2 — Complete
+- QA adds contour compactness, low-compactness region count, playable-label ratio and subject-region ratio.
+- Excessive contour complexity contributes to publishability scoring.
+
+## S39 — Automatic Repair Engine — Complete
+- Non-publishable variants automatically receive one deterministic repair attempt.
+- Repair adapts color count, region target, simplification and edge sensitivity according to QA issue codes.
+- A repair replaces the original only when QA score improves; initial score and repair metadata remain visible in the variant manifest.
+- Validation: Visual Processor 20/20 tests PASS.

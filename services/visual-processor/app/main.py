@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from app.processor import ProcessorOptions, process_image, process_variants
 
-app = FastAPI(title="AppColoreando Visual Processor", version="0.9.0")
+app = FastAPI(title="AppColoreando Visual Processor", version="0.19.0")
 OUTPUT_ROOT = Path("/content-data/generation-jobs")
 
 
@@ -35,7 +35,7 @@ class ProcessRequest(BaseModel):
     semanticHints: list[SemanticHint] = Field(default_factory=list)
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "healthy", "engine": "s29-ai-assisted-generation"}
+    return {"status": "healthy", "engine": "s39-generation-engine-v2"}
 
 
 @app.post("/process")
