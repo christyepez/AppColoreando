@@ -70,3 +70,23 @@ public interface IGenerationAdjustmentStore
     Task<bool> DeleteAsync(
         string resultManifestPath, int regionId, CancellationToken ct);
 }
+
+public interface IGenerationPublicationStore
+{
+    Task<GenerationPublicationAssets?> MaterializeAsync(
+        Guid artworkId,
+        string resultManifestPath,
+        IReadOnlyCollection<RegionAdjustmentDto> adjustments,
+        CancellationToken ct);
+    Task<GenerationArtifactDto?> ReadPublishedAsync(
+        Guid artworkId, string artifactKind, CancellationToken ct);
+}
+
+public interface IGenerationPublishingService
+{
+    Task<ArtworkDto> PublishAsync(
+        Guid userId,
+        Guid jobId,
+        PublishGenerationRequest request,
+        CancellationToken ct);
+}

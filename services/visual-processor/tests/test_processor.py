@@ -40,7 +40,7 @@ def test_process_image_creates_playable_bundle(tmp_path: Path) -> None:
     assert result["regionCount"] >= 4
     assert 3 <= result["colorCount"] <= 6
     for name in ("manifest.json", "regions.json", "palette.json",
-                 "artwork.svg", "artwork-lineart.svg", "preview-colored.png", "preview-lineart.png"):
+                 "artwork.svg", "artwork-lineart.svg", "preview-colored.png", "preview-lineart.png", "bundle.json"):
         assert (output / name).exists()
     regions = json.loads((output / "regions.json").read_text(encoding="utf-8"))
     assert regions
@@ -57,6 +57,11 @@ def test_process_image_creates_playable_bundle(tmp_path: Path) -> None:
     assert manifest["schemaVersion"] == "2.0"
     assert manifest["qa"]["regionCount"] == len(regions)
     assert 0.0 < manifest["qa"]["playableCoverage"] <= 1.0
+    bundle = json.loads((output / "bundle.json").read_text(encoding="utf-8"))
+    assert bundle["schemaVersion"] == "2.2"
+    assert bundle["regions"] == regions
+    assert bundle["palette"] == palette
+    assert bundle["adjustments"] == []
 
 
 def test_process_image_is_deterministic(tmp_path: Path) -> None:

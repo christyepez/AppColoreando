@@ -9,7 +9,7 @@ namespace AppColoreando.Api.Controllers;
 [ApiController]
 [Authorize(Policy = "ContentWrite")]
 [Route("api/admin/content-generation")]
-public sealed class ContentGenerationController(IContentGenerationService service) : ControllerBase
+public sealed class ContentGenerationController(IContentGenerationService service, IGenerationPublishingService publishing) : ControllerBase
 {
     [HttpPost("source-assets")]
     [RequestSizeLimit(25 * 1024 * 1024)]
@@ -67,6 +67,10 @@ public sealed class ContentGenerationController(IContentGenerationService servic
         await service.DeleteGenerationAdjustmentAsync(UserId(), id, regionId, ct);
         return NoContent();
     }
+
+    [HttpPost("jobs/{id:guid}/publish")]
+    public async Task<IActionResult> Publish(Guid id, PublishGenerationRequest request, CancellationToken ct) =>
+        Ok(await publishing.PublishAsync(UserId(), id, request, ct));
 
     private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 }

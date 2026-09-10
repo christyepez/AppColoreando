@@ -170,8 +170,22 @@ public sealed class UserAccountService(IUserRepository users, IUserProfileReposi
     private static string NormalizeOptional(string value, string fallback) => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
 }
 
-public sealed class CatalogService(IArtworkRepository artworks, ICategoryRepository categories, ICountryRepository countries, ICollectionRepository collections) : ICatalogService
+public sealed class CatalogService(IArtworkRepository artworks, ICategoryRepository categories, ICountryRepository countries, ICollectionRepository collections, IGenerationPublicationStore publication) : ICatalogService
 {
+    public async Task<ArtworkDto?> GetArtworkAsync(Guid id, CancellationToken ct)
+    {
+        var artwork = await artworks.GetAsync(id, ct);
+        return artwork is null || !artwork.IsPublished ? null : ArtworkRepositoryMap(artwork);
+    }
+
+    private static ArtworkDto ArtworkRepositoryMap(Artwork x) => new(x.Id, x.Title, x.Description, x.CategoryId, x.CountryCode, x.BrandId, x.LicenseAgreementId, x.LicenseType, x.LicenseReference, x.ThumbnailUrl, x.AssetUrl, x.BundleChecksum, x.Difficulty, x.RegionCount, x.PublishingStatus, x.ScheduledPublishAtUtc, x.PublishedAtUtc, x.Assets.Select(a => new ArtworkAssetDto(a.Id, a.Kind, a.Uri, a.ContentType, a.Checksum, a.SizeBytes, a.IsPrimary)).ToArray());
+
+    public async Task<GenerationArtifactDto?> GetArtworkArtifactAsync(Guid id, string kind, CancellationToken ct)
+    {
+        if (!await artworks.PublishedExistsAsync(id, ct)) return null;
+        return await publication.ReadPublishedAsync(id, kind, ct);
+    }
+
     public Task<PageResult<ArtworkDto>> SearchAsync(CatalogQuery query, CancellationToken ct) => artworks.SearchAsync(query with { Page = Math.Max(1, query.Page), PageSize = Math.Clamp(query.PageSize, 1, 100) }, ct);
     public Task<IReadOnlyCollection<CategoryDto>> GetCategoriesAsync(CancellationToken ct) => categories.ListAsync(ct);
     public Task<IReadOnlyCollection<CountryDto>> GetCountriesAsync(CancellationToken ct) => countries.ListAsync(ct);

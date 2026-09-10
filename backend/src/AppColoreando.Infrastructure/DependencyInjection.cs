@@ -40,6 +40,7 @@ public static class DependencyInjection
         services.AddSingleton<ISourceAssetStorage, FileSystemSourceAssetStorage>();
         services.AddSingleton<IGenerationArtifactReader, FileSystemGenerationArtifactReader>();
         services.AddSingleton<IGenerationAdjustmentStore, FileSystemGenerationAdjustmentStore>();
+        services.AddSingleton<IGenerationPublicationStore, FileSystemGenerationPublicationStore>();
         services.AddSingleton<IGenerationJobQueue, RabbitMqGenerationJobQueue>();
         services.AddHttpClient<IVisualProcessorClient, VisualProcessorClient>(client =>
         {

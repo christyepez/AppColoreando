@@ -38,6 +38,12 @@ services:
     ports: ["9000:9000", "9001:9001"]
     volumes: [minio_data:/data]
 
+  content-init:
+    image: alpine:3.22
+    command: ["sh", "-c", "mkdir -p /content-data/source-assets /content-data/generation-jobs /content-data/published && chown -R 1654:1654 /content-data"]
+    volumes: [content_data:/content-data]
+    restart: "no"
+
   api:
     build:
       context: ./backend
@@ -57,11 +63,14 @@ services:
       RabbitMQ__User: ${RABBITMQ_USER:-appcoloreando}
       RabbitMQ__Password: ${RABBITMQ_PASSWORD}
       ContentGeneration__SourceAssetRoot: /content-data/source-assets
+      ContentGeneration__PublishedRoot: /content-data/published
       Cors__AllowedOrigins__0: http://localhost:4200
       Cors__AllowedOrigins__1: http://localhost:8083
     ports: ["8080:8080"]
     volumes: [content_data:/content-data]
     depends_on:
+      content-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -91,6 +100,10 @@ services:
         condition: service_healthy
 
   visual-processor:
+    user: "1654:1654"
+    depends_on:
+      content-init:
+        condition: service_completed_successfully
     build:
       context: ./services/visual-processor
       dockerfile: Dockerfile

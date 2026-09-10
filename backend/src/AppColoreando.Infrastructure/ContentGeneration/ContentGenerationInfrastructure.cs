@@ -47,7 +47,7 @@ public sealed class RabbitMqGenerationJobQueue(IConfiguration configuration) : I
             queue: queueName, durable: true, exclusive: false,
             autoDelete: false, arguments: null, cancellationToken: ct);
 
-        var payload = JsonSerializer.Serialize(new { jobId, occurredAtUtc = DateTime.UtcNow });
+        var payload = JsonSerializer.Serialize(new GenerationQueueMessage(jobId, DateTime.UtcNow));
         var body = Encoding.UTF8.GetBytes(payload);
         var properties = new BasicProperties { Persistent = true, ContentType = "application/json" };
         await channel.BasicPublishAsync(

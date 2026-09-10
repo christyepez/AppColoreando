@@ -37,7 +37,7 @@ public sealed class Worker(
 
             try
             {
-                var payload = JsonSerializer.Deserialize<QueueMessage>(delivery.Body.Span);
+                var payload = JsonSerializer.Deserialize<GenerationQueueMessage>(delivery.Body.Span);
                 if (payload is null) throw new InvalidOperationException("Invalid generation queue message.");
                 await ProcessJobAsync(payload.JobId, stoppingToken);
                 await channel.BasicAckAsync(delivery.DeliveryTag, multiple: false, cancellationToken: stoppingToken);
@@ -81,6 +81,4 @@ public sealed class Worker(
         job.Status = result.Success ? GenerationJobStatus.PreviewReady : GenerationJobStatus.Failed;
         await uow.SaveChangesAsync(ct);
     }
-
-    private sealed record QueueMessage(Guid JobId, DateTime OccurredAtUtc);
 }

@@ -124,13 +124,15 @@ class DemoColor {
 }
 
 class DemoRegion {
-  DemoRegion({required this.id, required this.colorId, required this.points, this.smooth = false, this.pathBuilder}) : rect = _bounds(points);
+  DemoRegion({required this.id, required this.colorId, required this.points, this.smooth = false, this.pathBuilder, this.labelOffset, this.labelVisibleAtBase = true}) : rect = _bounds(points);
   final int id;
   final int colorId;
   final List<Offset> points;
   final Rect rect;
   final bool smooth;
   final RegionPathBuilder? pathBuilder;
+  final Offset? labelOffset;
+  final bool labelVisibleAtBase;
 
   Path path(Size size) {
     if (pathBuilder != null) return pathBuilder!(size);

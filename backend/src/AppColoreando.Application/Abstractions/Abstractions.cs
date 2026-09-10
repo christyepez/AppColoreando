@@ -135,6 +135,8 @@ public interface IUserAccountService
 
 public interface ICatalogService
 {
+    Task<ArtworkDto?> GetArtworkAsync(Guid id, CancellationToken ct);
+    Task<GenerationArtifactDto?> GetArtworkArtifactAsync(Guid id, string kind, CancellationToken ct);
     Task<PageResult<ArtworkDto>> SearchAsync(CatalogQuery query, CancellationToken ct);
     Task<IReadOnlyCollection<CategoryDto>> GetCategoriesAsync(CancellationToken ct);
     Task<IReadOnlyCollection<CountryDto>> GetCountriesAsync(CancellationToken ct);

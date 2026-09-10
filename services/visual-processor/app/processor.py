@@ -575,10 +575,25 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
         "labelsVisibleAtBase": sum(1 for region in regions if region.label_visible_at_base),
         "labelsRequiringZoom": sum(1 for region in regions if not region.label_visible_at_base),
     }
+    playable_bundle = {
+        "schemaVersion": "2.2",
+        "width": int(labels.shape[1]),
+        "height": int(labels.shape[0]),
+        "difficulty": options.difficulty,
+        "styleCode": options.style_code,
+        "palette": palette_payload,
+        "regions": region_payload,
+        "adjustments": [],
+        "effect": _style_effect_metadata(options.style_code),
+    }
+    bundle_path = output_dir / "bundle.json"
+    bundle_path.write_text(json.dumps(playable_bundle, indent=2), encoding="utf-8")
+
     manifest = {
         "schemaVersion": "2.0",
         "width": int(labels.shape[1]),
         "height": int(labels.shape[0]),
+        "bundlePath": str(bundle_path),
         "palettePath": str(output_dir / "palette.json"),
         "regionsPath": str(output_dir / "regions.json"),
         "svgPath": str(output_dir / "artwork.svg"),

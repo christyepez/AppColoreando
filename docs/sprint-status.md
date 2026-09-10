@@ -43,3 +43,15 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Artifact whitelist extended safely for `regions` and `palette`.
 - Canonical-path validation blocks external primary manifests and artifact traversal.
 - Validation: .NET Release build 0 warnings/0 errors; backend 23/23 tests PASS; Angular production build PASS.
+
+## S26 — Mobile Generated Bundle Integration — Complete
+- Visual Processor emits self-contained playable `bundle.json` schema 2.2 with palette, regions, SVG paths, metadata and adjustments overlay slot.
+- Generation jobs can be published as immutable `Artwork` records with SHA-256 checksum and public API bundle/thumbnail endpoints.
+- S25 fine-tuning overrides are materialized into a published copy; the original generation bundle remains unchanged.
+- Flutter loads published artwork metadata, follows `assetUrl`, parses SVG/Bézier paths, applies overrides and reuses the existing coloring/hit-test engine.
+- Demo artworks remain a safe fallback when generated content is unavailable.
+- RabbitMQ publisher/consumer now share a case-stable `GenerationQueueMessage` contract.
+- Docker shared content volume is initialized for non-root UID 1654 before API/Worker/Processor start.
+- Local Docker environment `appcoloreando-dev` validated with API/Admin/Web/Processor/RabbitMQ/MinIO/Prometheus/Grafana endpoints healthy.
+- End-to-end smoke PASS: login → upload → queue → worker → processor → PreviewReady → publish → public bundle + thumbnail.
+- Validation: .NET Release 0 warnings/0 errors; backend 25/25 tests PASS; Flutter analyze PASS; Flutter 9/9 tests PASS; Flutter Web Release PASS; Visual Processor 10/10 PASS; `git diff --check` PASS.

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:app_coloreando/src/catalog/demo_artwork.dart';
+import 'package:app_coloreando/src/catalog/generated_artwork_repository.dart';
 import 'package:app_coloreando/src/coloring/local_progress_store.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -18,6 +19,7 @@ class _ColoringPageState extends ConsumerState<ColoringPage> {
   Set<int> completed = {};
   int? lastCompleted;
   Timer? _saveDebounce;
+  DemoArtwork? _artwork;
 
   @override
   void initState() {
@@ -26,9 +28,11 @@ class _ColoringPageState extends ConsumerState<ColoringPage> {
   }
 
   Future<void> _load() async {
+    final generated = await ref.read(generatedArtworkRepositoryProvider).load(widget.artworkId);
+    final artwork = generated ?? demoArtworkById(widget.artworkId);
     final stored = await ref.read(localProgressStoreProvider).load(widget.artworkId);
     if (!mounted) return;
-    setState(() => completed = stored);
+    setState(() { _artwork = artwork; completed = stored; selectedColorId = artwork.palette.first.id; });
   }
 
   Future<void> _save() async {
@@ -49,7 +53,10 @@ class _ColoringPageState extends ConsumerState<ColoringPage> {
 
   @override
   Widget build(BuildContext context) {
-    final artwork = demoArtworkById(widget.artworkId);
+    final artwork = _artwork;
+    if (artwork == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     final progress = artwork.regions.isEmpty ? 0.0 : completed.length / artwork.regions.length;
     final remainingForColor = artwork.regions.where((r) => r.colorId == selectedColorId && !completed.contains(r.id)).length;
 
@@ -211,10 +218,11 @@ class ColoringPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = highlighted ? 3 : (active ? 1.25 : .8)
         ..color = highlighted ? const Color(0xFFE75D70) : (active ? const Color(0xFF8A8883) : const Color(0xFFD7D3CC)));
-      if (!done && (active || highlighted)) {
+      if (!done && region.labelVisibleAtBase && (active || highlighted)) {
         text.text = TextSpan(text: '${region.colorId}', style: TextStyle(color: highlighted ? const Color(0xFFE75D70) : const Color(0xFF55524D), fontSize: (size.shortestSide / 34).clamp(9, 14), fontWeight: FontWeight.w700));
         text.layout();
-        final center = Offset(region.rect.center.dx * size.width, region.rect.center.dy * size.height);
+        final anchor = region.labelOffset ?? region.rect.center;
+        final center = Offset(anchor.dx * size.width, anchor.dy * size.height);
         text.paint(canvas, center - Offset(text.width / 2, text.height / 2));
       }
     }

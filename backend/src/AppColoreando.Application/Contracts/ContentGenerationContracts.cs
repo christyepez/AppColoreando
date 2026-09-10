@@ -46,3 +46,17 @@ public sealed record RegionAdjustmentDto(
     string? Note,
     Guid UpdatedByUserId,
     DateTime UpdatedAtUtc);
+
+public sealed record PublishGenerationRequest(
+    string Title,
+    Guid CategoryId,
+    string? CountryCode,
+    string? Description = null);
+
+public sealed record GenerationPublicationAssets(
+    string BundlePath,
+    string ThumbnailPath,
+    int RegionCount,
+    string Checksum);
+
+public sealed record GenerationQueueMessage(Guid JobId, DateTime OccurredAtUtc);
