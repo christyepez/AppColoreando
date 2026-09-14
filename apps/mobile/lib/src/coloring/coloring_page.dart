@@ -54,12 +54,14 @@ class _ColoringPageState extends ConsumerState<ColoringPage> {
 
   void _scheduleSave() {
     _saveDebounce?.cancel();
+    _transformController.dispose();
     _saveDebounce = Timer(const Duration(milliseconds: 350), _save);
   }
 
   @override
   void dispose() {
     _saveDebounce?.cancel();
+    _transformController.dispose();
     super.dispose();
   }
 
@@ -128,9 +130,16 @@ IconButton(tooltip: 'Deshacer', icon: const Icon(Icons.undo_rounded), onPressed:
                     decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), boxShadow: const [BoxShadow(color: Color(0x12000000), blurRadius: 18, offset: Offset(0, 5))]),
                     clipBehavior: Clip.antiAlias,
                     child: InteractiveViewer(
+                      transformationController: _transformController,
                       minScale: 1,
                       maxScale: 7,
                       boundaryMargin: const EdgeInsets.all(60),
+                      onInteractionUpdate: (_) {
+                        final scale = _transformController.value.getMaxScaleOnAxis();
+                        if ((scale - _zoomScale).abs() > 0.01) {
+                          setState(() => _zoomScale = scale);
+                        }
+                      },
                       child: LayoutBuilder(builder: (context, constraints) => GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTapUp: (details) => _tap(details.localPosition, Size(constraints.maxWidth, constraints.maxHeight), artwork),

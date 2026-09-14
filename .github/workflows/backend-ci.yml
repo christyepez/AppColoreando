@@ -2,7 +2,7 @@ name: AppColoreando CI
 
 on:
   push:
-    branches: [ main, develop/baseline-platform, 'sprints/**' ]
+    branches: [ main, develop/baseline-platform, 'sprints/**', 'release/**' ]
     paths:
       - 'backend/**'
       - 'apps/admin/**'

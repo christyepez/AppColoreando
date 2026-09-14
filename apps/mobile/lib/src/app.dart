@@ -3,7 +3,6 @@ import 'package:app_coloreando/src/catalog/demo_artwork.dart';
 import 'package:app_coloreando/src/coloring/coloring_page.dart';
 import 'package:app_coloreando/src/coloring/local_library_store.dart';
 import 'package:app_coloreando/src/catalog/catalog_repository.dart';
-import 'package:app_coloreando/src/catalog/demo_artwork.dart';
 import 'package:app_coloreando/src/config/app_config.dart';
 import 'package:app_coloreando/src/l10n/app_strings.dart';
 import 'package:app_coloreando/src/theme/app_theme.dart';
@@ -377,14 +376,14 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
         padding: const EdgeInsets.fromLTRB(20, 2, 20, 10),
         child: Wrap(spacing: 10, runSpacing: 8, children: [
           if (countries.isNotEmpty) SizedBox(width: 180, child: DropdownButtonFormField<String?>(
-            value: countryCode,
+            initialValue: countryCode,
             isExpanded: true,
             decoration: const InputDecoration(labelText: 'Pais', border: OutlineInputBorder()),
             items: [const DropdownMenuItem<String?>(value: null, child: Text('Todos')), ...countries.map((x) => DropdownMenuItem<String?>(value: x.code, child: Text(x.name)))],
             onChanged: (value) { setState(() => countryCode = value); _runSearch(); },
           )),
           if (collections.isNotEmpty) SizedBox(width: 220, child: DropdownButtonFormField<String?>(
-            value: collectionId,
+            initialValue: collectionId,
             isExpanded: true,
             decoration: const InputDecoration(labelText: 'Coleccion', border: OutlineInputBorder()),
             items: [const DropdownMenuItem<String?>(value: null, child: Text('Todas')), ...collections.map((x) => DropdownMenuItem<String?>(value: x.id, child: Text('${x.name} (${x.artworkCount})', overflow: TextOverflow.ellipsis)))],

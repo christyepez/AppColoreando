@@ -6,7 +6,7 @@ on:
       tag:
         description: Docker image tag shared by all AppColoreando services
         required: true
-        default: s30
+        default: 1.0.0-rc1
   push:
     tags:
       - 'v*'

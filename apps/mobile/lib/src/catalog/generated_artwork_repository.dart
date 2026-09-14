@@ -25,19 +25,19 @@ class GeneratedArtworkRepository {
     try {
       final response = await _dio.get<Map<String, Object?>>('$apiRoot/api/catalog/artworks/$artworkId');
       final metadata = response.data;
-      if (metadata == null) return _loadCached(artworkId);
+      if (metadata == null) return await _loadCached(artworkId);
       final bundleUri = _bundleUri(metadata);
-      if (bundleUri == null) return _loadCached(artworkId);
+      if (bundleUri == null) return await _loadCached(artworkId);
       final bundleResponse = await _dio.getUri<Map<String, Object?>>(bundleUri);
       final bundle = bundleResponse.data;
-      if (bundle == null) return _loadCached(artworkId);
+      if (bundle == null) return await _loadCached(artworkId);
       final artwork = decode(artworkId, metadata, bundle);
       await _cache?.save(artworkId, metadata, bundle);
       return artwork;
     } on DioException {
-      return _loadCached(artworkId);
+      return await _loadCached(artworkId);
     } on FormatException {
-      return _loadCached(artworkId);
+      return await _loadCached(artworkId);
     }
   }
 
