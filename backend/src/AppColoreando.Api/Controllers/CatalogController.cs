@@ -42,4 +42,14 @@ public sealed class CatalogController(ICatalogService service) : ControllerBase
 
     [HttpGet("collections")]
     public async Task<IActionResult> GetCollections(CancellationToken ct) => Ok(await service.GetCollectionsAsync(ct));
+
+    [HttpGet("daily")]
+    public async Task<IActionResult> GetDaily([FromQuery] DateOnly? date, CancellationToken ct)
+    {
+        var result = await service.GetDailyContentAsync(date ?? DateOnly.FromDateTime(DateTime.UtcNow), ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpGet("events")]
+    public async Task<IActionResult> GetEvents(CancellationToken ct) => Ok(await service.GetEventsAsync(ct));
 }

@@ -27,6 +27,8 @@ public sealed record LicenseAgreementDto(Guid Id, Guid? BrandId, string Name, st
 public sealed record UpsertLicenseAgreementRequest(Guid? BrandId, string Name, string RightsSummary, DateTime ValidFromUtc, DateTime? ValidToUtc, bool AllowsStoreDistribution, bool AllowsKidsMode, bool AllowsOfflineDownload, bool FeatureEnabled, IReadOnlyCollection<UpsertLicenseTerritoryRequest> Territories);
 public sealed record CollectionDto(Guid Id, string Name, string Slug, string? Description, string? CountryCode, bool IsActive, int ArtworkCount);
 public sealed record UpsertCollectionRequest(string Name, string Slug, string? Description, string? CountryCode, bool IsActive, IReadOnlyCollection<Guid> ArtworkIds);
+public sealed record DailyContentDto(DateOnly Date, ArtworkDto Artwork);
+public sealed record CatalogEventDto(Guid CollectionId, string Name, string Slug, string? Description, string? CountryCode, int ArtworkCount, IReadOnlyCollection<ArtworkDto> Artworks);
 
 public sealed record ArtworkAssetDto(Guid Id, ArtworkAssetKind Kind, string Uri, string ContentType, string? Checksum, long SizeBytes, bool IsPrimary);
 public sealed record UpsertArtworkAssetRequest(ArtworkAssetKind Kind, string Uri, string ContentType, string? Checksum, long SizeBytes, bool IsPrimary);
@@ -38,10 +40,15 @@ public sealed record ProgressDto(Guid ArtworkId, decimal CompletionPercent, IRea
 public sealed record SyncProgressResponse(ProgressDto Progress, SyncOperationStatus Status, string? ConflictReason);
 public sealed record UserLibraryResponse(IReadOnlyCollection<ProgressDto> Favorites, IReadOnlyCollection<ProgressDto> InProgress, IReadOnlyCollection<ProgressDto> Completed, IReadOnlyCollection<ProgressDto> Recent, IReadOnlyCollection<ProgressDto> Downloaded);
 public sealed record UserActivityDto(Guid Id, Guid? ArtworkId, string ActivityType, string? MetadataJson, DateTime OccurredAtUtc);
+public sealed record ClientTelemetryEventRequest(string EventName, Guid? ArtworkId, IReadOnlyDictionary<string, string>? Properties, DateTime? OccurredAtUtc = null);
+public sealed record ClientTelemetryBatchRequest(IReadOnlyCollection<ClientTelemetryEventRequest> Events);
+public sealed record TelemetryIngestResponse(int AcceptedCount, int RejectedCount);
+public sealed record MonetizationPlanDto(string Code, string Name, bool IsActive, int MaxOfflineArtworks, bool AdsEnabled);
+public sealed record MonetizationEntitlementsResponse(string PlanCode, bool IsPremium, bool AdsEnabled, int MaxOfflineArtworks, bool PremiumStylesEnabled, bool EventBoostsEnabled, bool PriorityDownloadsEnabled);
 public sealed record DailyMetricDto(DateOnly Date, int Sessions, int ArtworksOpened, int ArtworksCompleted, int RegionsColored, int ActiveSeconds);
 public sealed record UserMetricsResponse(IReadOnlyCollection<DailyMetricDto> Daily, int Sessions, int ArtworksOpened, int ArtworksCompleted, int RegionsColored, int ActiveSeconds);
 public sealed record AchievementDto(string Code, string Name, int XpAwarded, DateTime EarnedAtUtc);
-public sealed record UserAchievementSummary(int Xp, int StreakDays, IReadOnlyCollection<AchievementDto> Achievements);
+public sealed record UserAchievementSummary(int Xp, int Level, int CurrentLevelXp, int NextLevelXp, int StreakDays, IReadOnlyCollection<AchievementDto> Achievements);
 
 public sealed record AdminUpdateUserRequest(string DisplayName, string Role, bool IsActive);
 public sealed record AdminMetricsResponse(int Users, int PublishedArtworks, int Completions, int ActivityEvents);

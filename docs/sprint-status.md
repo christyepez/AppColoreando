@@ -89,42 +89,132 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - The algorithm remains deterministic and local; no new external model or service dependency is introduced.
 - Visual Processor health engine updated to `s30-natural-spatial-segmentation`.
 - Validation: Visual Processor 14/14 tests PASS.
-## S31 — Subject-Aware Segmentation — Complete
-- Foreground likelihood combines border-color distance with a conservative center prior.
-- Subject likelihood participates in clustering so main objects are less likely to dissolve into background-color regions.
-- Edge strength is included as a clustering feature to better preserve structural boundaries.
 
-## S32 — Edge and Contour Intelligence — Complete
-- Component masks are cleaned with difficulty-aware elliptical morphology before vectorization.
-- Contour simplification adapts to compactness, preserving more geometry on irregular shapes and smoothing regular regions.
-- SVG generation remains deterministic and compatible with the existing mobile bundle contract.
-
-## S33 — Region Topology Guardrails — Complete
-- Thin/sliver playable regions are detected using area ratio, aspect ratio and contour compactness.
-- Non-playable slivers are excluded before bundle emission, reducing accidental taps and unreadable numbered zones.
-- Validation: Visual Processor 16/16 tests PASS.
 ## S34 — Smart Palette Harmonization — Complete
-- Difficulty-aware saturation floors keep generated palettes vivid while preserving dark/light structure.
-- Harmonization runs before artistic style effects so presets remain predictable.
+- Added deterministic HSV palette harmonization after vivid color generation.
+- Neutral colors are protected while chromatic colors receive gentle saturation/value balancing.
+- Near-duplicate hues gain value separation to improve paint-number readability without aggressive recoloring.
+- Validation includes deterministic palette and neutral-preservation coverage.
 
-## S35 — Number Placement V2 — Complete
-- Region labels now expose `labelPriority` based on safe-radius, area and center weighting.
-- Existing zoom/readability metadata remains backward compatible.
+## S35 � Intelligent Number Placement � Complete
+- Number scale now uses the actual inscribed label radius and digit count, reducing labels that collide with region boundaries.
+- Existing zoom visibility metadata remains backward-compatible.
+- Validation covered by Visual Processor tests.
 
-## S36 — Photo to Illustration Preprocessing — Complete
-- Difficulty-aware bilateral/median stylization reduces photographic noise before segmentation.
-- Kids/Easy receive stronger abstraction while Detailed/Master retain more texture.
+## S36 � Photo to Illustration Preprocessing � Complete
+- Added deterministic mean-shift plus bilateral preprocessing before LAB segmentation.
+- Smoothing strength scales by difficulty, with stronger simplification for Kids/Easy and greater detail preservation for Detailed/Master.
+- No external AI/model dependency was introduced; bundle contracts remain unchanged.
+- Visual Processor health engine updated to s36-photo-illustration-preprocess.
 
-## S37 — Automatic Artistic Style Routing — Complete
-- `presetCode=auto` deterministically selects Natural, Aura, Postal Viva or Lumina from image brightness, saturation and warmth.
-- Explicit presets still override automatic routing.
 
-## S38 — Generation Quality Scoring V2 — Complete
-- QA adds contour compactness, low-compactness region count, playable-label ratio and subject-region ratio.
-- Excessive contour complexity contributes to publishability scoring.
 
-## S39 — Automatic Repair Engine — Complete
-- Non-publishable variants automatically receive one deterministic repair attempt.
-- Repair adapts color count, region target, simplification and edge sensitivity according to QA issue codes.
-- A repair replaces the original only when QA score improves; initial score and repair metadata remain visible in the variant manifest.
-- Validation: Visual Processor 20/20 tests PASS.
+## S37 — Automatic Artistic Styles — Complete
+- Added independent art-style profiles: auto, nature, animals, portrait, architecture, mandala, kawaii, fantasy and natural.
+- Auto mode resolves art style from semantic hints while preserving existing special-effect style codes.
+- Art profiles tune illustration smoothing and palette saturation/brightness deterministically.
+- Resolved art style is emitted in bundle and manifest metadata and propagated to all difficulty variants.
+- API accepts optional artStyle without breaking existing callers.
+- Validation: Visual Processor 22/22 tests PASS.
+
+
+## S38 — Visual QA V2 — Complete
+- Added sliver-region ratio and count to generation QA.
+- Added average contour compactness to detect overly complex/fragile shapes.
+- Added cramped-label metrics based on actual interior clearance.
+- Added semantic coverage metric and related QA issue reporting.
+- Publishability score now penalizes poor topology, contour complexity and label clearance.
+- Validation target: Visual Processor full regression suite.
+
+
+## S41 — Admin Editorial Workflow — Complete
+- Enforced editorial states: PreviewReady -> NeedsReview -> Approved -> Published.
+- Added audited submit-for-review, approve, and return-to-preview transitions.
+- Publishing now requires explicit Approved status.
+- Generation Studio includes review note and editorial action controls.
+
+
+## S42 — Mobile Gameplay Polish — Complete
+- Mobile consumes labelMinZoom metadata and reveals region numbers according to actual zoom.
+- InteractiveViewer scale is tracked without changing bundle contracts.
+- Added haptic feedback for correct fills and wrong-color region taps.
+
+## S43 — Daily Content / Events — Complete
+- Added deterministic daily artwork endpoint over published catalog content.
+- Added active collection events endpoint with up to six featured artworks per event.
+- Mobile Home consumes daily/event feeds with graceful demo fallback.
+- Daily thumbnail metadata is loaded before the full playable bundle to keep Home lightweight.
+- Backend regression and Flutter test/web release validation completed on trabajo.
+
+## S44 — Gamification V2
+- Expanded milestone achievements for regions, completed artworks and streaks.
+- Added Daily Artist and Event Explorer completion rewards.
+- Added XP level progression with increasing thresholds.
+- Reused existing metrics and UserAchievement persistence; no new schema required.
+- Backend regression: 33/33 tests passing on trabajo.
+
+
+## S46 - Search / Discovery V2
+- Catalog now queries the real catalog API with 320 ms search debounce.
+- Added filters for country, collection, difficulty and licensed-only content.
+- Discovery metadata loads countries and active collections from existing catalog endpoints.
+- Remote artwork cards navigate directly to the playable artwork without preloading bundles.
+- Offline/API-failure fallback keeps local demo discovery available.
+- Validation: Flutter 14/14 tests PASS; Flutter Web release build PASS on trabajo.
+
+## S45 — Favorites / Recently Played — Complete
+- Added persistent local favorites and recent-played history.
+- Recent history is unique, newest-first and capped at 20 artworks.
+- Coloring screen exposes a favorite toggle with haptic feedback.
+- Profile surfaces favorites and recent counts.
+- Validation: Flutter 13/13 tests PASS on trabajo and MarketingIndo.
+
+## S47 — Personalization / Recommendations — Complete
+- Recommendations infer dominant country and preferred difficulty from favorites/recent activity.
+- Home "Para ti" consumes personalized remote recommendations with local demo fallback.
+- Already-seen signal artworks are excluded where possible and general catalog results backfill sparse recommendations.
+- Validation: Flutter 15/15 tests PASS on trabajo and MarketingIndo; Web release build PASS on trabajo.
+
+## S48 — Offline / Cache V2 — Complete
+- Added persistent generated-artwork cache shared across mobile and Web.
+- Remote metadata and bundle JSON are cached after successful load.
+- Generated artwork loading falls back to cached content when network/catalog fetches fail.
+- Cache entries expire after 30 days and use LRU eviction with a default maximum of 8 artworks.
+- Corrupted/expired cache entries are removed automatically.
+- Existing offline progress synchronization queue remains compatible and unchanged.
+- Validation: Flutter 18/18 tests PASS; Flutter Web release build PASS on trabajo.
+
+## S49 — Analytics / Telemetry — Complete
+- Added authenticated batch telemetry ingestion using the existing UserActivityHistory store.
+- Client telemetry is restricted to an allowlist of event names and property keys; free-form PII fields are rejected.
+- Added timestamp normalization and a 50-event server batch limit.
+- Flutter queues telemetry locally (max 100) and flushes up to 50 events when an access token is available.
+- Instrumented artwork open, favorite, region color and completion events.
+- Validation: backend 36/36 tests PASS; Flutter 20/20 tests PASS; Flutter Web release PASS on trabajo.
+## S50 — Monetization Foundation — Complete
+- Added Free/Premium plan definitions and server-side entitlement response.
+- Free defaults: ads enabled, 8 offline artworks, premium styles/event boosts/priority downloads disabled.
+- Premium defaults: ads disabled, 100 offline artworks and premium gates enabled.
+- Added authenticated GET /api/me/entitlements endpoint.
+- Flutter includes conservative Free fallback and reusable feature-gate helpers.
+- No store purchase or receipt validation is simulated; those remain for Store Readiness.
+- Validation: backend 38/38 tests PASS; Flutter 22/22 tests PASS; Flutter Web release PASS on trabajo.
+## S51 — Store Readiness — Complete
+- Android release targets API 36 and declares INTERNET explicitly.
+- iOS includes PrivacyInfo.xcprivacy for required-reason API disclosure used by local preferences.
+- Store-readiness checklist documents privacy, signing, metadata and account-owned identifiers.
+- Release AAB generated successfully on MarketingIndo (52.3 MB); Flutter 22/22 tests PASS.
+- trabajo remains without Android SDK, but this no longer blocks artifact validation.
+
+## S52 — Production Hardening — Complete
+- Applied the configured fixed-window rate-limit policy to API controllers.
+- Added defensive response headers and disabled public metrics by default in Production.
+- Production config disables seed data and automatic startup migrations.
+- Production startup fails closed for wildcard AllowedHosts or the local sample database password.
+- Validation: backend 38/38 tests PASS on trabajo and MarketingIndo.
+
+## S53 — Release Candidate — Complete
+- Created branch release/rc-1-20260914 from validated S31-S39 baseline plus S40-S52 workspace changes.
+- Full RC regression: backend 38/38 PASS, Flutter 22/22 PASS, visual processor 25/25 PASS, Angular admin build PASS.
+- Android release AAB from the same mobile state was generated successfully during S51 validation.
+- Incidental package-lock line-ending noise and docker-compose.ghcr.safe.yml are excluded from the RC commit.

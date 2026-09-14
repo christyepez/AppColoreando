@@ -124,7 +124,7 @@ class DemoColor {
 }
 
 class DemoRegion {
-  DemoRegion({required this.id, required this.colorId, required this.points, this.smooth = false, this.pathBuilder, this.labelOffset, this.labelVisibleAtBase = true}) : rect = _bounds(points);
+  DemoRegion({required this.id, required this.colorId, required this.points, this.smooth = false, this.pathBuilder, this.labelOffset, this.labelVisibleAtBase = true, this.labelMinZoom = 1.0}) : rect = _bounds(points);
   final int id;
   final int colorId;
   final List<Offset> points;
@@ -133,6 +133,7 @@ class DemoRegion {
   final RegionPathBuilder? pathBuilder;
   final Offset? labelOffset;
   final bool labelVisibleAtBase;
+  final double labelMinZoom;
   Path? _normalizedPathCache;
   Size? _scaledPathSize;
   Path? _scaledPathCache;

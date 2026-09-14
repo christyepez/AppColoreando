@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:app_coloreando/src/catalog/demo_artwork.dart';
+import 'package:app_coloreando/src/catalog/generated_artwork_cache.dart';
 import 'package:app_coloreando/src/config/app_config.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -9,28 +10,44 @@ import 'package:path_drawing/path_drawing.dart';
 
 final generatedArtworkRepositoryProvider = Provider<GeneratedArtworkRepository>((ref) {
   final config = ref.watch(appConfigProvider);
-  return GeneratedArtworkRepository(config.apiBaseUrl, Dio());
+  final cache = ref.watch(generatedArtworkCacheProvider);
+  return GeneratedArtworkRepository(config.apiBaseUrl, Dio(), cache: cache);
 });
 
 class GeneratedArtworkRepository {
-  GeneratedArtworkRepository(this.apiRoot, this._dio);
+  GeneratedArtworkRepository(this.apiRoot, this._dio, {GeneratedArtworkCache? cache}) : _cache = cache;
   final String apiRoot;
   final Dio _dio;
+  final GeneratedArtworkCache? _cache;
 
   Future<DemoArtwork?> load(String artworkId) async {
     if (!_looksLikeGuid(artworkId)) return null;
     try {
       final response = await _dio.get<Map<String, Object?>>('$apiRoot/api/catalog/artworks/$artworkId');
       final metadata = response.data;
-      if (metadata == null) return null;
+      if (metadata == null) return _loadCached(artworkId);
       final bundleUri = _bundleUri(metadata);
-      if (bundleUri == null) return null;
+      if (bundleUri == null) return _loadCached(artworkId);
       final bundleResponse = await _dio.getUri<Map<String, Object?>>(bundleUri);
       final bundle = bundleResponse.data;
-      return bundle == null ? null : decode(artworkId, metadata, bundle);
+      if (bundle == null) return _loadCached(artworkId);
+      final artwork = decode(artworkId, metadata, bundle);
+      await _cache?.save(artworkId, metadata, bundle);
+      return artwork;
     } on DioException {
-      return null;
+      return _loadCached(artworkId);
     } on FormatException {
+      return _loadCached(artworkId);
+    }
+  }
+
+  Future<DemoArtwork?> _loadCached(String artworkId) async {
+    final cached = await _cache?.load(artworkId);
+    if (cached == null) return null;
+    try {
+      return decode(artworkId, cached.metadata, cached.bundle);
+    } on FormatException {
+      await _cache?.remove(artworkId);
       return null;
     }
   }
@@ -102,6 +119,7 @@ class GeneratedArtworkRepository {
         ),
         labelVisibleAtBase: adjustment?['labelVisibleAtBase'] as bool? ??
             (item['labelVisibleAtBase'] as bool? ?? true),
+        labelMinZoom: (item['labelMinZoom'] as num?)?.toDouble() ?? 1.0,
         pathBuilder: (size) => normalizedPath.transform(Float64List.fromList([
           size.width, 0, 0, 0,
           0, size.height, 0, 0,

@@ -1,5 +1,9 @@
+import 'dart:async';
 import 'package:app_coloreando/src/catalog/demo_artwork.dart';
 import 'package:app_coloreando/src/coloring/coloring_page.dart';
+import 'package:app_coloreando/src/coloring/local_library_store.dart';
+import 'package:app_coloreando/src/catalog/catalog_repository.dart';
+import 'package:app_coloreando/src/catalog/demo_artwork.dart';
 import 'package:app_coloreando/src/config/app_config.dart';
 import 'package:app_coloreando/src/l10n/app_strings.dart';
 import 'package:app_coloreando/src/theme/app_theme.dart';
@@ -8,6 +12,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 final localeProvider = StateProvider<Locale>((ref) => const Locale('es'));
+final personalizedRecommendationsProvider = FutureProvider<List<CatalogArtwork>>((ref) async {
+  final library = await ref.watch(localLibrarySnapshotProvider.future);
+  final ids = <String>{...library.favoriteIds, ...library.recentIds}.toList();
+  try {
+    return await ref.watch(catalogRepositoryProvider).recommendations(signalIds: ids);
+  } catch (_) {
+    return const <CatalogArtwork>[];
+  }
+});
 
 final routerProvider = Provider<GoRouter>((ref) => GoRouter(
   initialLocation: '/',
@@ -74,6 +87,7 @@ class HomePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final strings = AppStrings.of(ref.watch(localeProvider));
+    final recommendations = ref.watch(personalizedRecommendationsProvider).valueOrNull ?? const <CatalogArtwork>[];
     return CustomScrollView(slivers: [
       SliverToBoxAdapter(child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
@@ -89,18 +103,19 @@ class HomePage extends ConsumerWidget {
         ]),
       )),
       const SliverToBoxAdapter(child: _DailyBanner()),
+      const SliverToBoxAdapter(child: _EventsStrip()),
       SliverToBoxAdapter(child: SizedBox(height: 52, child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         scrollDirection: Axis.horizontal,
         children: const [_Pill('Todo', true), _Pill('Para ti', false), _Pill('Popular', false), _Pill('Aura', false), _Pill('Tesoro', false), _Pill('Postales', false), _Pill('Animales', false)],
       ))),
-      const SliverToBoxAdapter(child: _SectionHeader('Seleccion del dia', 'Ilustraciones originales para relajarte')),
+      const SliverToBoxAdapter(child: _SectionHeader('Para ti', 'Recomendaciones segun tus favoritos y recientes')),
       SliverToBoxAdapter(child: SizedBox(height: 262, child: ListView.separated(
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
         scrollDirection: Axis.horizontal,
-        itemCount: 3,
+        itemCount: recommendations.isEmpty ? 3 : recommendations.length,
         separatorBuilder: (_, __) => const SizedBox(width: 14),
-        itemBuilder: (_, i) => SizedBox(width: 190, child: ArtworkCard(artwork: demoArtworks[i])),
+        itemBuilder: (_, i) => SizedBox(width: 190, child: recommendations.isEmpty ? ArtworkCard(artwork: demoArtworks[i]) : _CatalogRemoteCard(artwork: recommendations[i])),
       ))),
       const SliverToBoxAdapter(child: _SectionHeader('Descubre mas', 'Explora nuevas colecciones')),
       SliverPadding(
@@ -115,11 +130,17 @@ class HomePage extends ConsumerWidget {
   }
 }
 
-class _DailyBanner extends StatelessWidget {
+class _DailyBanner extends ConsumerWidget {
   const _DailyBanner();
   @override
-  Widget build(BuildContext context) {
-    final artwork = demoArtworks[2];
+  Widget build(BuildContext context, WidgetRef ref) {
+    final fallback = demoArtworks[2];
+    final daily = ref.watch(dailyContentProvider).valueOrNull;
+    final config = ref.watch(appConfigProvider);
+    final title = daily?.artwork.title ?? fallback.title;
+    final artworkId = daily?.artwork.id ?? fallback.id;
+    final thumbnail = daily?.artwork.thumbnailUrl;
+    final thumbnailUrl = thumbnail == null || thumbnail.isEmpty ? null : (thumbnail.startsWith('http') ? thumbnail : '${config.apiBaseUrl}$thumbnail');
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 6, 20, 18),
       child: Container(
@@ -127,15 +148,15 @@ class _DailyBanner extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         decoration: BoxDecoration(borderRadius: BorderRadius.circular(26), gradient: const LinearGradient(colors: [Color(0xFF243B55), Color(0xFF4CA6A8)])),
         child: Stack(children: [
-          Positioned(right: -20, top: -34, width: 185, height: 185, child: Opacity(opacity: .92, child: CustomPaint(painter: DemoArtworkPainter(artwork: artwork)))),
+          Positioned(right: -20, top: -34, width: 185, height: 185, child: Opacity(opacity: .92, child: thumbnailUrl == null ? CustomPaint(painter: DemoArtworkPainter(artwork: fallback)) : Image.network(thumbnailUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => CustomPaint(painter: DemoArtworkPainter(artwork: fallback))))),
           Padding(padding: const EdgeInsets.all(20), child: SizedBox(width: 190, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('IMAGEN DEL DIA', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1.1)),
             const SizedBox(height: 8),
-            const Text('Atardecer tropical', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
+            Text(title, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w800)),
             const Spacer(),
             FilledButton.tonalIcon(
               style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: const Color(0xFF243B55)),
-              onPressed: () => context.push('/color/${artwork.id}'),
+              onPressed: () => context.push('/color/$artworkId'),
               icon: const Icon(Icons.palette_outlined, size: 18), label: const Text('Colorear'),
             ),
           ]))),
@@ -145,6 +166,35 @@ class _DailyBanner extends StatelessWidget {
   }
 }
 
+class _EventsStrip extends ConsumerWidget {
+  const _EventsStrip();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final events = ref.watch(catalogEventsProvider).valueOrNull ?? const <CatalogEvent>[];
+    if (events.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+      child: SizedBox(height: 78, child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: events.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (_, i) {
+          final event = events[i];
+          return Container(
+            width: 220,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18), border: Border.all(color: const Color(0xFFE9E6E1))),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(event.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 4),
+              Text('${event.artworkCount} ilustraciones${event.countryCode == null ? '' : ' · ${event.countryCode}'}', style: const TextStyle(fontSize: 11, color: Colors.black45)),
+            ]),
+          );
+        },
+      )),
+    );
+  }
+}
 class _Pill extends StatelessWidget {
   const _Pill(this.label, this.selected);
   final String label;
@@ -221,58 +271,196 @@ class _RoundAction extends StatelessWidget {
   Widget build(BuildContext context) => Material(color: Colors.white, shape: const CircleBorder(), child: InkWell(customBorder: const CircleBorder(), onTap: onTap, child: Padding(padding: const EdgeInsets.all(11), child: Icon(icon, size: 21))));
 }
 
-class CatalogPage extends StatefulWidget {
+class CatalogPage extends ConsumerStatefulWidget {
   const CatalogPage({super.key});
   @override
-  State<CatalogPage> createState() => _CatalogPageState();
+  ConsumerState<CatalogPage> createState() => _CatalogPageState();
 }
 
-class _CatalogPageState extends State<CatalogPage> {
+class _CatalogPageState extends ConsumerState<CatalogPage> {
   final search = TextEditingController();
-  String category = 'Todos';
+  Timer? _debounce;
+  CatalogPageResult? _remote;
+  CatalogDiscovery? _discovery;
+  String? countryCode;
+  String? collectionId;
+  int? difficulty;
+  bool licensedOnly = false;
+  bool loading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    Future.microtask(() async {
+      await _loadDiscovery();
+      await _runSearch();
+    });
+  }
+
+  Future<void> _loadDiscovery() async {
+    try {
+      final value = await ref.read(catalogRepositoryProvider).discovery();
+      if (mounted) setState(() => _discovery = value);
+    } catch (_) {}
+  }
+
+  Future<void> _runSearch() async {
+    if (mounted) setState(() => loading = true);
+    try {
+      final value = await ref.read(catalogRepositoryProvider).search(CatalogFilter(
+        search: search.text,
+        countryCode: countryCode,
+        collectionId: collectionId,
+        difficulty: difficulty,
+        licensedOnly: licensedOnly ? true : null,
+        pageSize: 48,
+      ));
+      if (mounted) setState(() => _remote = value);
+    } catch (_) {
+      if (mounted) setState(() => _remote = null);
+    } finally {
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  void _scheduleSearch() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 320), _runSearch);
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    search.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final query = search.text.toLowerCase();
-    final items = demoArtworks.where((x) => (category == 'Todos' || x.category == category) && (query.isEmpty || x.title.toLowerCase().contains(query))).toList();
+    final query = search.text.trim().toLowerCase();
+    final fallback = demoArtworks.where((x) {
+      if (difficulty != null && x.difficulty != difficulty) return false;
+      if (countryCode != null && x.countryCode != countryCode) return false;
+      return query.isEmpty || x.title.toLowerCase().contains(query) || x.category.toLowerCase().contains(query);
+    }).toList();
+    final remoteItems = _remote?.items ?? const <CatalogArtwork>[];
+    final useRemote = _remote != null;
+    final countries = _discovery?.countries ?? const <CatalogCountry>[];
+    final collections = _discovery?.collections ?? const <CatalogCollection>[];
+
     return CustomScrollView(slivers: [
-      SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.fromLTRB(20, 18, 20, 12), child: Text('Catalogo', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)))),
+      SliverToBoxAdapter(child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+        child: Row(children: [
+          Expanded(child: Text('Catalogo', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800))),
+          if (loading) const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+        ]),
+      )),
       SliverToBoxAdapter(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 20), child: TextField(
         controller: search,
-        onChanged: (_) => setState(() {}),
-        decoration: InputDecoration(prefixIcon: const Icon(Icons.search_rounded), hintText: 'Que quieres colorear hoy?', filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderSide: BorderSide.none, borderRadius: BorderRadius.circular(18))),
+        onChanged: (_) { setState(() {}); _scheduleSearch(); },
+        decoration: InputDecoration(prefixIcon: const Icon(Icons.search_rounded), hintText: 'Que quieres colorear hoy?', suffixIcon: search.text.isEmpty ? null : IconButton(icon: const Icon(Icons.close_rounded), onPressed: () { search.clear(); setState(() {}); _runSearch(); }), filled: true, fillColor: Colors.white, border: OutlineInputBorder(borderSide: BorderSide.none, borderRadius: BorderRadius.circular(18))),
       ))),
       SliverToBoxAdapter(child: SizedBox(height: 58, child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10), scrollDirection: Axis.horizontal,
-        children: [for (final item in const ['Todos', 'Naturaleza', 'Paisajes', 'Flores', 'Animales']) Padding(padding: const EdgeInsets.only(right: 8), child: ChoiceChip(label: Text(item), selected: category == item, onSelected: (_) => setState(() => category = item)))],
+        children: [
+          ChoiceChip(label: const Text('Todos'), selected: difficulty == null, onSelected: (_) { setState(() => difficulty = null); _runSearch(); }),
+          const SizedBox(width: 8),
+          for (final entry in const [(1, 'Facil'), (2, 'Intermedio'), (3, 'Medio'), (4, 'Detalle')]) ...[
+            ChoiceChip(label: Text(entry.$2), selected: difficulty == entry.$1, onSelected: (_) { setState(() => difficulty = entry.$1); _runSearch(); }),
+            const SizedBox(width: 8),
+          ],
+          FilterChip(label: const Text('Licenciados'), selected: licensedOnly, onSelected: (value) { setState(() => licensedOnly = value); _runSearch(); }),
+        ],
       ))),
+      if (countries.isNotEmpty || collections.isNotEmpty) SliverToBoxAdapter(child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 2, 20, 10),
+        child: Wrap(spacing: 10, runSpacing: 8, children: [
+          if (countries.isNotEmpty) SizedBox(width: 180, child: DropdownButtonFormField<String?>(
+            value: countryCode,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Pais', border: OutlineInputBorder()),
+            items: [const DropdownMenuItem<String?>(value: null, child: Text('Todos')), ...countries.map((x) => DropdownMenuItem<String?>(value: x.code, child: Text(x.name)))],
+            onChanged: (value) { setState(() => countryCode = value); _runSearch(); },
+          )),
+          if (collections.isNotEmpty) SizedBox(width: 220, child: DropdownButtonFormField<String?>(
+            value: collectionId,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Coleccion', border: OutlineInputBorder()),
+            items: [const DropdownMenuItem<String?>(value: null, child: Text('Todas')), ...collections.map((x) => DropdownMenuItem<String?>(value: x.id, child: Text('${x.name} (${x.artworkCount})', overflow: TextOverflow.ellipsis)))],
+            onChanged: (value) { setState(() => collectionId = value); _runSearch(); },
+          )),
+        ]),
+      )),
+      SliverToBoxAdapter(child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
+        child: Text(useRemote ? '${_remote!.total} resultados' : 'Modo sin conexion · ${fallback.length} resultados', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black45)),
+      )),
       SliverPadding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         sliver: SliverGrid.builder(
-          itemCount: items.length,
+          itemCount: useRemote ? remoteItems.length : fallback.length,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 14, crossAxisSpacing: 14, childAspectRatio: .72),
-          itemBuilder: (_, i) => ArtworkCard(artwork: items[i]),
+          itemBuilder: (_, i) => useRemote ? _CatalogRemoteCard(artwork: remoteItems[i]) : ArtworkCard(artwork: fallback[i]),
         ),
       ),
     ]);
   }
 }
 
-class ProfilePage extends StatelessWidget {
+class _CatalogRemoteCard extends StatelessWidget {
+  const _CatalogRemoteCard({required this.artwork});
+  final CatalogArtwork artwork;
+  @override
+  Widget build(BuildContext context) => Material(
+    color: Colors.white,
+    borderRadius: BorderRadius.circular(22),
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: () => context.push('/color/${artwork.id}'),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Expanded(child: Container(
+          color: const Color(0xFFF4F2EE),
+          alignment: Alignment.center,
+          child: artwork.thumbnailUrl != null && artwork.thumbnailUrl!.startsWith('http')
+              ? Image.network(artwork.thumbnailUrl!, fit: BoxFit.cover, width: double.infinity, height: double.infinity, errorBuilder: (_, __, ___) => const Icon(Icons.palette_outlined, size: 54, color: Colors.black26))
+              : const Icon(Icons.palette_outlined, size: 54, color: Colors.black26),
+        )),
+        Padding(padding: const EdgeInsets.fromLTRB(12, 10, 12, 12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(artwork.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 3),
+          Text('${artwork.countryCode ?? 'Global'} · ${artwork.regionCount} zonas', style: const TextStyle(fontSize: 11, color: Colors.black45)),
+        ])),
+      ]),
+    ),
+  );
+}
+class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});
   @override
-  Widget build(BuildContext context) => ListView(padding: const EdgeInsets.all(20), children: [
-    Text('Perfil', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
-    const SizedBox(height: 18),
-    Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: const Color(0xFF252525), borderRadius: BorderRadius.circular(24)), child: const Row(children: [
-      CircleAvatar(radius: 28, backgroundColor: Color(0xFFF4D35E), child: Icon(Icons.palette_rounded, color: Colors.black87)),
-      SizedBox(width: 14),
-      Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text('Mi espacio creativo', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)), SizedBox(height: 4), Text('0 obras terminadas - 0 XP', style: TextStyle(color: Colors.white60))])),
-    ])),
-    const SizedBox(height: 22),
-    const ListTile(leading: Icon(Icons.favorite_outline_rounded), title: Text('Favoritos'), subtitle: Text('Tus dibujos guardados'), trailing: Icon(Icons.chevron_right)),
-    const ListTile(leading: Icon(Icons.download_outlined), title: Text('Sin conexion'), subtitle: Text('Dibujos descargados'), trailing: Icon(Icons.chevron_right)),
-    const ListTile(leading: Icon(Icons.emoji_events_outlined), title: Text('Logros'), subtitle: Text('Colecciones, rachas y metas'), trailing: Icon(Icons.chevron_right)),
-  ]);
+  Widget build(BuildContext context, WidgetRef ref) {
+    final library = ref.watch(localLibrarySnapshotProvider).valueOrNull;
+    final favorites = library?.favoriteIds ?? const <String>[];
+    final recent = library?.recentIds ?? const <String>[];
+    return ListView(padding: const EdgeInsets.all(20), children: [
+      Text('Perfil', style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+      const SizedBox(height: 18),
+      Container(padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: const Color(0xFF252525), borderRadius: BorderRadius.circular(24)), child: Row(children: [
+        const CircleAvatar(radius: 28, backgroundColor: Color(0xFFF4D35E), child: Icon(Icons.palette_rounded, color: Colors.black87)),
+        const SizedBox(width: 14),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('Mi espacio creativo', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
+          const SizedBox(height: 4),
+          Text('${favorites.length} favoritos · ${recent.length} recientes', style: const TextStyle(color: Colors.white60)),
+        ])),
+      ])),
+      const SizedBox(height: 22),
+      ListTile(leading: const Icon(Icons.favorite_rounded), title: const Text('Favoritos'), subtitle: Text(favorites.isEmpty ? 'Aun no guardas dibujos' : '${favorites.length} dibujos guardados'), trailing: const Icon(Icons.chevron_right), onTap: () => context.go('/catalog')),
+      ListTile(leading: const Icon(Icons.history_rounded), title: const Text('Jugados recientemente'), subtitle: Text(recent.isEmpty ? 'Todavia no hay actividad' : '${recent.length} dibujos recientes'), trailing: const Icon(Icons.chevron_right), onTap: () => context.go('/catalog')),
+      const ListTile(leading: Icon(Icons.download_outlined), title: Text('Sin conexion'), subtitle: Text('Dibujos descargados'), trailing: Icon(Icons.chevron_right)),
+      const ListTile(leading: Icon(Icons.emoji_events_outlined), title: Text('Logros'), subtitle: Text('XP, niveles, rachas y metas'), trailing: Icon(Icons.chevron_right)),
+    ]);
+  }
 }
 
 class SettingsPage extends ConsumerWidget {

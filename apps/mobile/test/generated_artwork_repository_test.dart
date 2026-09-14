@@ -24,6 +24,7 @@ void main() {
             'labelX': 0.5,
             'labelY': 0.5,
             'labelVisibleAtBase': true,
+            'labelMinZoom': 2.5,
             'bounds': {'x': 0.1, 'y': 0.1, 'width': 0.8, 'height': 0.8},
           }
         ],
@@ -45,6 +46,7 @@ void main() {
     expect(region.contains(const Offset(.02, .02)), isFalse);
     expect(region.labelOffset, const Offset(.5, .5));
     expect(region.labelVisibleAtBase, isFalse);
+    expect(region.labelMinZoom, 2.5);
     expect(artwork.color(region.colorId).color, const Color(0xFF123456));
   });
 }

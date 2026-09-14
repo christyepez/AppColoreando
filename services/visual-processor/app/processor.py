@@ -21,6 +21,7 @@ class ProcessorOptions:
     contrast_boost: float
     difficulty: str = "Normal"
     style_code: str = "natural"
+    art_style: str = "auto"
     semantic_hints: tuple[dict, ...] = ()
 
 
@@ -42,7 +43,6 @@ class Region:
     label_visible_at_base: bool = True
     semantic_source: str = "heuristic"
     semantic_confidence: float = 0.55
-    label_priority: float = 0.0
 
 
 def _read_image(path: Path) -> np.ndarray:
@@ -65,16 +65,71 @@ def _resize_for_processing(image: np.ndarray, max_side: int = 1024) -> np.ndarra
     return cv2.resize(image, target, interpolation=cv2.INTER_AREA)
 
 
-def _illustration_preprocess(image: np.ndarray, difficulty: str) -> np.ndarray:
-    code = difficulty.lower()
-    passes = {"kids": 3, "easy": 3, "normal": 2, "detailed": 1, "master": 1}.get(code, 2)
-    sigma_color = {"kids": 72, "easy": 64, "normal": 56, "detailed": 44, "master": 34}.get(code, 56)
-    result = image.copy()
-    for _ in range(passes):
-        result = cv2.bilateralFilter(result, 9, sigma_color, 48)
-    if code in {"kids", "easy", "normal"}:
-        result = cv2.medianBlur(result, 3)
+def _resolve_art_style(requested: str, semantic_hints: tuple[dict, ...]) -> str:
+    normalized = (requested or "auto").strip().lower()
+    aliases = {"animal": "animals", "animals": "animals", "portraiture": "portrait", "portrait": "portrait", "fantasy": "fantasy", "nature": "nature", "architecture": "architecture", "mandala": "mandala", "kawaii": "kawaii", "natural": "natural"}
+    if normalized != "auto":
+        return aliases.get(normalized, "natural")
+    tokens = " ".join(str(h.get("tag", "")) + " " + str(h.get("role", "")) for h in semantic_hints).lower()
+    rules = (
+        ("animals", ("animal", "bird", "cat", "dog", "fish", "wildlife", "pet")),
+        ("portrait", ("face", "person", "portrait", "human", "skin")),
+        ("architecture", ("building", "architecture", "house", "city", "facade")),
+        ("mandala", ("mandala", "ornament", "pattern", "geometric")),
+        ("kawaii", ("kawaii", "cute", "chibi")),
+        ("fantasy", ("fantasy", "dragon", "magic", "fairy", "myth")),
+        ("nature", ("nature", "flower", "plant", "tree", "landscape", "forest")),
+    )
+    for style, keywords in rules:
+        if any(keyword in tokens for keyword in keywords):
+            return style
+    return "natural"
+
+
+def _art_style_profile(style: str) -> dict[str, float]:
+    return {
+        "natural": {"smooth": 1.0, "saturation": 1.0, "brightness": 1.0},
+        "nature": {"smooth": 0.95, "saturation": 1.08, "brightness": 1.01},
+        "animals": {"smooth": 0.92, "saturation": 1.06, "brightness": 1.01},
+        "portrait": {"smooth": 1.10, "saturation": 0.96, "brightness": 1.03},
+        "architecture": {"smooth": 0.82, "saturation": 0.94, "brightness": 1.00},
+        "mandala": {"smooth": 0.78, "saturation": 1.16, "brightness": 1.02},
+        "kawaii": {"smooth": 1.18, "saturation": 1.14, "brightness": 1.08},
+        "fantasy": {"smooth": 0.90, "saturation": 1.18, "brightness": 0.99},
+    }.get(style, {"smooth": 1.0, "saturation": 1.0, "brightness": 1.0})
+
+
+def _apply_art_palette(palette: list[str], art_style: str) -> list[str]:
+    profile = _art_style_profile(art_style)
+    result: list[str] = []
+    for color in palette:
+        bgr = np.uint8([[list(_hex_to_bgr(color))]])
+        hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)[0, 0].astype(np.float32)
+        if hsv[1] > 20:
+            hsv[1] = np.clip(hsv[1] * profile["saturation"], 0, 255)
+        hsv[2] = np.clip(hsv[2] * profile["brightness"], 18, 252)
+        result.append(_hex_from_bgr(cv2.cvtColor(np.uint8([[hsv]]), cv2.COLOR_HSV2BGR)[0, 0]))
     return result
+
+def _illustration_preprocess(image: np.ndarray, difficulty: str, art_style: str = "natural") -> np.ndarray:
+    strength = {
+        "kids": (13, 22), "easy": (11, 20), "normal": (9, 18),
+        "detailed": (7, 15), "master": (5, 12),
+    }.get(difficulty.lower(), (9, 18))
+    spatial_radius, color_radius = strength
+    smooth = _art_style_profile(art_style)["smooth"]
+    spatial_radius = max(3, int(round(spatial_radius * smooth)))
+    color_radius = max(6, int(round(color_radius * smooth)))
+    illustrated = cv2.pyrMeanShiftFiltering(image, spatial_radius, color_radius, maxLevel=1)
+    illustrated = cv2.bilateralFilter(illustrated, 7, 32, 32)
+    return illustrated
+
+
+def _label_scale(region: "Region", width: int, height: int) -> float:
+    radius_px = max(1.0, region.label_radius * min(width, height))
+    digits = max(1, len(str(region.color_id)))
+    by_radius = radius_px / (18.0 + 6.0 * (digits - 1))
+    return float(np.clip(by_radius, 0.24, 0.78))
 
 def _preprocess(image: np.ndarray, edge_sensitivity: float) -> np.ndarray:
     diameter = max(5, int(7 + 8 * max(0.0, min(edge_sensitivity, 1.0))))
@@ -211,22 +266,36 @@ def _vivid_palette(centers_lab: np.ndarray, saturation_boost: float, contrast_bo
     return colors
 
 
+def _harmonize_palette(palette: list[str]) -> list[str]:
+    if not palette:
+        return []
+    hsv_values: list[np.ndarray] = []
+    for color in palette:
+        blue, green, red = _hex_to_bgr(color)
+        hsv_values.append(cv2.cvtColor(np.uint8([[[blue, green, red]]]), cv2.COLOR_BGR2HSV)[0, 0].astype(np.float32))
+    chromatic = [value for value in hsv_values if value[1] >= 36]
+    median_s = float(np.median([value[1] for value in chromatic])) if chromatic else 0.0
+    median_v = float(np.median([value[2] for value in hsv_values]))
+    result: list[str] = []
+    previous: list[np.ndarray] = []
+    for hsv in hsv_values:
+        tuned = hsv.copy()
+        if tuned[1] >= 36:
+            tuned[1] = np.clip(0.78 * tuned[1] + 0.22 * max(tuned[1], median_s), 0, 255)
+            tuned[2] = np.clip(0.88 * tuned[2] + 0.12 * median_v, 24, 252)
+            for prior in previous:
+                hue_distance = min(abs(tuned[0] - prior[0]), 180.0 - abs(tuned[0] - prior[0]))
+                if hue_distance < 3.0 and abs(tuned[2] - prior[2]) < 12.0:
+                    tuned[2] = np.clip(tuned[2] + (14.0 if tuned[2] <= 220 else -14.0), 24, 252)
+                    break
+        previous.append(tuned.copy())
+        result.append(_hex_from_bgr(cv2.cvtColor(np.uint8([[tuned]]), cv2.COLOR_HSV2BGR)[0, 0]))
+    return result
+
 def _hex_from_bgr(value: np.ndarray) -> str:
     blue, green, red = [int(np.clip(x, 0, 255)) for x in value]
     return f"#{red:02X}{green:02X}{blue:02X}"
 
-
-def _harmonize_palette(palette: list[str], difficulty: str) -> list[str]:
-    result: list[str] = []
-    minimum_sat = {"kids": 0.42, "easy": 0.36, "normal": 0.30, "detailed": 0.24, "master": 0.20}.get(difficulty.lower(), 0.30)
-    for color in palette:
-        blue, green, red = _hex_to_bgr(color)
-        hsv = cv2.cvtColor(np.uint8([[[blue, green, red]]]), cv2.COLOR_BGR2HSV)[0, 0].astype(np.float32)
-        if hsv[2] > 48:
-            hsv[1] = max(hsv[1], minimum_sat * 255.0)
-        hsv[2] = np.clip(hsv[2], 34.0, 248.0)
-        result.append(_hex_from_bgr(cv2.cvtColor(np.uint8([[hsv]]), cv2.COLOR_HSV2BGR)[0, 0]))
-    return result
 
 def _apply_style_palette(palette: list[str], style_code: str) -> list[str]:
     style = style_code.lower()
@@ -473,7 +542,8 @@ def _is_sliver_region(contour: np.ndarray, image_area: int) -> bool:
     x, y, w, h = cv2.boundingRect(contour)
     area = max(1.0, float(cv2.contourArea(contour)))
     aspect = max(w, h) / max(1.0, float(min(w, h)))
-    return area / max(1, image_area) < 0.02 and (aspect > 10.0 or _contour_compactness(contour) < 0.035)
+    area_ratio = area / max(1, image_area)
+    return area_ratio < 0.03 and (aspect > 8.0 or _contour_compactness(contour) < 0.06)
 
 def _extract_regions(labels: np.ndarray, options: ProcessorOptions) -> list[Region]:
     height, width = labels.shape
@@ -541,7 +611,7 @@ def _render_line_art(labels: np.ndarray, regions: list[Region]) -> np.ndarray:
         x = int(region.label_x * width)
         y = int(region.label_y * height)
         text = str(region.color_id)
-        scale = max(0.32, min(0.72, math.sqrt(region.area) / 155.0))
+        scale = _label_scale(region, width, height)
         thickness = 1
         size, _ = cv2.getTextSize(text, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness)
         cv2.putText(canvas, text, (x - size[0] // 2, y + size[1] // 2), cv2.FONT_HERSHEY_SIMPLEX, scale, (105, 105, 105), thickness, cv2.LINE_AA)
@@ -562,22 +632,6 @@ def _square_preview(image: np.ndarray, size: int, margin_ratio: float = 0.04) ->
     canvas[y:y + target_h, x:x + target_w] = resized
     return canvas
 
-
-def _resolve_style_code(image: np.ndarray, requested: str) -> str:
-    requested = (requested or "natural").lower()
-    if requested != "auto":
-        return requested
-    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-    saturation = float(np.mean(hsv[:, :, 1])) / 255.0
-    brightness = float(np.mean(hsv[:, :, 2])) / 255.0
-    warm = float(np.mean(image[:, :, 2])) - float(np.mean(image[:, :, 0]))
-    if brightness < 0.42:
-        return "lumina"
-    if saturation > 0.48:
-        return "aura"
-    if warm > 18.0:
-        return "postal-viva"
-    return "natural"
 
 def _style_effect_metadata(style_code: str) -> dict:
     style = style_code.lower()
@@ -637,17 +691,18 @@ def _write_svg(path: Path, regions: list[Region], palette: list[str], line_art: 
 
 def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions) -> dict:
     image = _resize_for_processing(_read_image(source_path))
-    image = _illustration_preprocess(image, options.difficulty)
-    lab = _preprocess(image, options.edge_sensitivity)
+    resolved_art_style = _resolve_art_style(options.art_style, options.semantic_hints)
+    illustrated = _illustration_preprocess(image, options.difficulty, resolved_art_style)
+    lab = _preprocess(illustrated, options.edge_sensitivity)
     color_count = max(3, min(options.max_colors, 24))
     labels, centers = _cluster_colors(lab, color_count, options.difficulty)
     labels, centers = _merge_similar_clusters(labels, centers, options.difficulty)
     labels = _edge_aware_smooth_labels(labels, lab, options.edge_sensitivity)
     labels = _merge_micro_regions(labels, centers, options)
-    resolved_style = _resolve_style_code(image, options.style_code)
     palette = _vivid_palette(centers, options.saturation_boost, options.contrast_boost)
-    palette = _harmonize_palette(palette, options.difficulty)
-    palette = _apply_style_palette(palette, resolved_style)
+    palette = _harmonize_palette(palette)
+    palette = _apply_art_palette(palette, resolved_art_style)
+    palette = _apply_style_palette(palette, options.style_code)
     regions = _extract_regions(labels, options)
     _assign_semantics(regions, labels.shape, palette, options.semantic_hints)
     if not regions:
@@ -656,7 +711,7 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
     output_dir.mkdir(parents=True, exist_ok=True)
     colored = _render_colored(labels, palette)
     line_art = _render_line_art(labels, regions)
-    special_preview = _render_style_preview(colored, line_art, resolved_style)
+    special_preview = _render_style_preview(colored, line_art, options.style_code)
     cv2.imwrite(str(output_dir / "preview-colored.png"), colored)
     cv2.imwrite(str(output_dir / "preview-lineart.png"), line_art)
     _write_webp(output_dir / "thumbnail.webp", _square_preview(colored, 512), 90)
@@ -689,7 +744,6 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
             "labelMinZoom": round(region.label_min_zoom, 2),
             "labelFontSize": round(region.label_font_size, 6),
             "labelVisibleAtBase": region.label_visible_at_base,
-            "labelPriority": region.label_priority,
             "bounds": {
                 "x": round(region.bounds[0], 6),
                 "y": round(region.bounds[1], 6),
@@ -717,11 +771,12 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
         "width": int(labels.shape[1]),
         "height": int(labels.shape[0]),
         "difficulty": options.difficulty,
-        "styleCode": resolved_style,
+        "styleCode": options.style_code,
+        "artStyle": resolved_art_style,
         "palette": palette_payload,
         "regions": region_payload,
         "adjustments": [],
-        "effect": _style_effect_metadata(resolved_style),
+        "effect": _style_effect_metadata(options.style_code),
         "qa": qa,
     }
     bundle_path = output_dir / "bundle.json"
@@ -742,7 +797,8 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
         "catalogPreviewPath": str(output_dir / "catalog-preview.webp"),
         "lineArtWebpPath": str(output_dir / "lineart-preview.webp"),
         "specialPreviewPath": str(output_dir / "special-preview.webp"),
-        "effect": _style_effect_metadata(resolved_style),
+        "artStyle": resolved_art_style,
+        "effect": _style_effect_metadata(options.style_code),
         "qa": qa,
     }
     manifest_path = output_dir / "manifest.json"
@@ -761,13 +817,16 @@ def _build_qa_report(regions, centers, shape, options, playable_area, image_area
     micro_threshold = _micro_region_threshold(shape, options)
     tiny_count = sum(1 for region in regions if region.area < micro_threshold)
     hidden_count = sum(1 for region in regions if not region.label_visible_at_base)
+    sliver_count = sum(1 for region in regions if _is_sliver_region(region.contour, image_area))
     compactness_values = [_contour_compactness(region.contour) for region in regions]
     average_compactness = float(np.mean(compactness_values)) if compactness_values else 0.0
-    low_compactness_count = sum(1 for value in compactness_values if value < 0.06)
-    subject_count = sum(1 for region in regions if region.semantic_role.startswith("subject"))
+    cramped_count = sum(1 for region in regions if region.label_radius < 0.007)
+    classified_count = sum(1 for region in regions if region.semantic_tag != "unclassified")
+    semantic_coverage = classified_count / max(1, len(regions))
     tiny_ratio = tiny_count / max(1, len(regions))
     hidden_ratio = hidden_count / max(1, len(regions))
-    low_compactness_ratio = low_compactness_count / max(1, len(regions))
+    sliver_ratio = sliver_count / max(1, len(regions))
+    cramped_ratio = cramped_count / max(1, len(regions))
     issues = []
     score = 100
     if coverage < 0.98:
@@ -782,9 +841,18 @@ def _build_qa_report(regions, centers, shape, options, playable_area, image_area
     if hidden_ratio > 0.50:
         score -= 8
         issues.append({"severity": "Warning", "code": "QA_LABEL_READABILITY", "message": f"Hidden label ratio is {hidden_ratio:.2%}."})
-    if low_compactness_ratio > 0.12:
+    if sliver_ratio > 0.05:
         score -= 10
-        issues.append({"severity": "Warning", "code": "QA_CONTOUR_COMPLEXITY", "message": f"Low-compactness contour ratio is {low_compactness_ratio:.2%}."})
+        issues.append({"severity": "Warning", "code": "QA_SLIVER_REGIONS", "message": f"Sliver-region ratio is {sliver_ratio:.2%}."})
+    if average_compactness < 0.18:
+        score -= 8
+        issues.append({"severity": "Warning", "code": "QA_CONTOUR_COMPLEXITY", "message": f"Average contour compactness is {average_compactness:.3f}."})
+    if cramped_ratio > 0.25:
+        score -= 8
+        issues.append({"severity": "Warning", "code": "QA_LABEL_CLEARANCE", "message": f"Cramped-label ratio is {cramped_ratio:.2%}."})
+    if semantic_coverage < 0.90:
+        score -= 6
+        issues.append({"severity": "Info", "code": "QA_SEMANTIC_COVERAGE", "message": f"Semantic coverage is {semantic_coverage:.2%}."})
     score = max(0, min(100, score))
     return {
         "score": score, "publishable": score >= 90 and not any(x["severity"] == "Error" for x in issues),
@@ -793,11 +861,10 @@ def _build_qa_report(regions, centers, shape, options, playable_area, image_area
         "minimumPaletteDeltaE": minimum_delta, "microRegionThreshold": micro_threshold,
         "difficulty": options.difficulty, "semanticCounts": semantic_counts,
         "labelsVisibleAtBase": len(regions) - hidden_count, "labelsRequiringZoom": hidden_count,
-        "tinyRegionCount": tiny_count,
-        "averageContourCompactness": round(average_compactness, 4),
-        "lowCompactnessRegionCount": low_compactness_count,
-        "playableLabelRatio": round((len(regions) - hidden_count) / max(1, len(regions)), 4),
-        "subjectRegionRatio": round(subject_count / max(1, len(regions)), 4),
+        "tinyRegionCount": tiny_count, "sliverRegionCount": sliver_count,
+        "sliverRegionRatio": round(sliver_ratio, 4), "averageContourCompactness": round(average_compactness, 4),
+        "crampedLabelCount": cramped_count, "crampedLabelRatio": round(cramped_ratio, 4),
+        "semanticCoverage": round(semantic_coverage, 4),
     }
 
 
@@ -822,39 +889,51 @@ def _variant_options(base: ProcessorOptions, difficulty: str) -> ProcessorOption
         contrast_boost=base.contrast_boost,
         difficulty=difficulty,
         style_code=base.style_code,
+        art_style=base.art_style,
         semantic_hints=base.semantic_hints,
     )
 
 
-def _repair_variant_options(options: ProcessorOptions, qa: dict) -> ProcessorOptions:
-    issues = {item.get("code") for item in qa.get("issues", [])}
-    colors = options.max_colors
-    target = options.target_regions
-    simplification = options.simplification_tolerance
-    edge = options.edge_sensitivity
-    if "QA_PALETTE_DELTA" in issues:
-        colors = max(4, colors - 2)
-    if "QA_MICRO_REGIONS" in issues or "QA_LABEL_READABILITY" in issues:
-        target = max(12, round(target * 0.82))
+def _repair_options(base: ProcessorOptions, qa: dict) -> ProcessorOptions:
+    issue_codes = {str(item.get("code", "")) for item in qa.get("issues", [])}
+    target_regions = base.target_regions
+    max_colors = base.max_colors
+    simplification = base.simplification_tolerance
+    edge_sensitivity = base.edge_sensitivity
+    if "QA_MICRO_REGIONS" in issue_codes or "QA_SLIVER_REGIONS" in issue_codes:
+        target_regions = max(12, round(target_regions * 0.82))
         simplification = min(0.78, simplification + 0.08)
-    if "QA_CONTOUR_COMPLEXITY" in issues:
-        simplification = min(0.82, simplification + 0.10)
-        edge = max(0.25, edge - 0.08)
-    if "QA_COVERAGE" in issues:
-        target = max(12, round(target * 0.88))
-    return ProcessorOptions(
-        target_regions=target,
-        max_colors=colors,
-        simplification_tolerance=simplification,
-        edge_sensitivity=edge,
-        curve_smoothness=max(options.curve_smoothness, 0.72),
-        saturation_boost=options.saturation_boost,
-        contrast_boost=options.contrast_boost,
-        difficulty=options.difficulty,
-        style_code=options.style_code,
-        semantic_hints=options.semantic_hints,
-    )
+    if "QA_PALETTE_DELTA" in issue_codes:
+        max_colors = max(4, max_colors - 1)
+    if "QA_CONTOUR_COMPACTNESS" in issue_codes:
+        simplification = min(0.82, simplification + 0.06)
+    if "QA_LABEL_CRAMPED" in issue_codes:
+        target_regions = max(12, round(target_regions * 0.88))
+    if "QA_COVERAGE" in issue_codes:
+        edge_sensitivity = max(0.15, edge_sensitivity - 0.08)
+    return ProcessorOptions(target_regions=target_regions, max_colors=max_colors, simplification_tolerance=simplification, edge_sensitivity=edge_sensitivity, curve_smoothness=base.curve_smoothness, saturation_boost=base.saturation_boost, contrast_boost=base.contrast_boost, difficulty=base.difficulty, style_code=base.style_code, art_style=base.art_style, semantic_hints=base.semantic_hints)
 
+
+def process_image_auto_repair(source_path: Path, output_dir: Path, options: ProcessorOptions) -> dict:
+    baseline = process_image(source_path, output_dir, options)
+    baseline_qa = baseline.get("qa", {})
+    if bool(baseline_qa.get("publishable", False)):
+        baseline["autoRepair"] = {"attempted": False, "accepted": False, "baselineScore": baseline_qa.get("score", 0), "finalScore": baseline_qa.get("score", 0)}
+        return baseline
+    repair_dir = output_dir.parent / f"{output_dir.name}-repair-candidate"
+    if repair_dir.exists():
+        shutil.rmtree(repair_dir)
+    repaired = process_image(source_path, repair_dir, _repair_options(options, baseline_qa))
+    baseline_score = int(baseline_qa.get("score", 0)); repaired_score = int(repaired.get("qa", {}).get("score", 0))
+    if repaired_score > baseline_score:
+        if output_dir.exists(): shutil.rmtree(output_dir)
+        shutil.move(str(repair_dir), str(output_dir))
+        repaired["manifestPath"] = str(output_dir / "manifest.json")
+        repaired["autoRepair"] = {"attempted": True, "accepted": True, "baselineScore": baseline_score, "finalScore": repaired_score}
+        return repaired
+    shutil.rmtree(repair_dir, ignore_errors=True)
+    baseline["autoRepair"] = {"attempted": True, "accepted": False, "baselineScore": baseline_score, "finalScore": baseline_score}
+    return baseline
 def process_variants(
     source_path: Path,
     output_dir: Path,
@@ -868,19 +947,7 @@ def process_variants(
     for difficulty in difficulties:
         variant_dir = output_dir / "variants" / difficulty.lower()
         options = _variant_options(base_options, difficulty)
-        result = process_image(source_path, variant_dir, options)
-        initial_score = int(result["qa"]["score"])
-        repair_attempted = not bool(result["qa"]["publishable"])
-        repaired = False
-        if repair_attempted:
-            repair_options = _repair_variant_options(options, result["qa"])
-            repair_dir = output_dir / "_repair" / difficulty.lower()
-            repair_result = process_image(source_path, repair_dir, repair_options)
-            if int(repair_result["qa"]["score"]) > initial_score:
-                shutil.rmtree(variant_dir, ignore_errors=True)
-                result = process_image(source_path, variant_dir, repair_options)
-                repaired = True
-            shutil.rmtree(repair_dir, ignore_errors=True)
+        result = process_image_auto_repair(source_path, variant_dir, options)
         variants.append({
             "code": difficulty.lower(),
             "difficulty": difficulty,
@@ -888,9 +955,6 @@ def process_variants(
             "regionCount": result["regionCount"],
             "colorCount": result["colorCount"],
             "qa": result["qa"],
-            "autoRepairAttempted": repair_attempted,
-            "autoRepaired": repaired,
-            "initialQaScore": initial_score,
             "isPrimary": difficulty.lower() == primary_difficulty.lower(),
         })
 

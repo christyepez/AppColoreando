@@ -51,6 +51,97 @@ public sealed class ContentGenerationServiceTests
         Assert.Equal(result.Id, queue.LastJobId);
     }
 
+    [Fact]
+    public async Task Create_batch_deduplicates_assets_and_queues_each_job()
+    {
+        var first = new SourceAsset { Id = Guid.NewGuid(), Status = SourceAssetStatus.Validated };
+        var second = new SourceAsset { Id = Guid.NewGuid(), Status = SourceAssetStatus.Validated };
+        var preset = new StylePreset { Id = Guid.NewGuid(), Code = "natural", IsActive = true };
+        var jobs = new FakeJobRepository();
+        var sut = CreateService(new FakeAssetRepository(first, second), new FakePresetRepository(preset), jobs);
+
+        var result = await sut.CreateGenerationBatchAsync(Guid.NewGuid(),
+            new CreateGenerationBatchRequest([first.Id, second.Id, first.Id], preset.Id),
+            CancellationToken.None);
+
+        Assert.Equal(2, result.RequestedCount);
+        Assert.Equal(2, result.QueuedCount);
+        Assert.Equal(2, result.Jobs.Count);
+        Assert.Equal(2, jobs.Items.Count);
+    }
+
+    [Fact]
+    public async Task Create_batch_rejects_more_than_one_hundred_assets()
+    {
+        var ids = Enumerable.Range(0, 101).Select(_ => Guid.NewGuid()).ToArray();
+        var sut = CreateService();
+        await Assert.ThrowsAsync<ArgumentException>(() => sut.CreateGenerationBatchAsync(
+            Guid.NewGuid(), new CreateGenerationBatchRequest(ids, Guid.NewGuid()), CancellationToken.None));
+    }
+    [Fact]
+    public async Task Batch_status_reports_progress_and_cancelled_items()
+    {
+        var batchId = Guid.NewGuid();
+        var jobs = new FakeJobRepository();
+        jobs.Items.AddRange([
+            new ArtworkGenerationJob { BatchId = batchId, Status = GenerationJobStatus.PreviewReady },
+            new ArtworkGenerationJob { BatchId = batchId, Status = GenerationJobStatus.Failed },
+            new ArtworkGenerationJob { BatchId = batchId, Status = GenerationJobStatus.Queued }
+        ]);
+        var sut = CreateService(jobs: jobs);
+        var status = await sut.GetGenerationBatchAsync(batchId, CancellationToken.None);
+        Assert.Equal(3, status.TotalCount);
+        Assert.Equal(2, status.CompletedCount);
+        Assert.Equal(66.67, status.ProgressPercent);
+    }
+
+    [Fact]
+    public async Task Cancel_batch_only_cancels_not_started_jobs()
+    {
+        var batchId = Guid.NewGuid();
+        var jobs = new FakeJobRepository();
+        jobs.Items.AddRange([
+            new ArtworkGenerationJob { BatchId = batchId, Status = GenerationJobStatus.Queued },
+            new ArtworkGenerationJob { BatchId = batchId, Status = GenerationJobStatus.Running }
+        ]);
+        var sut = CreateService(jobs: jobs);
+        var status = await sut.CancelGenerationBatchAsync(Guid.NewGuid(), batchId, CancellationToken.None);
+        Assert.Equal(1, status.CancelledCount);
+        Assert.Equal(1, status.RunningCount);
+    }
+    [Fact]
+    public async Task Editorial_flow_requires_review_before_approval()
+    {
+        var jobs = new FakeJobRepository();
+        var job = new ArtworkGenerationJob { Id = Guid.NewGuid(), Status = GenerationJobStatus.PreviewReady };
+        jobs.Items.Add(job);
+        var sut = CreateService(jobs: jobs);
+        var reviewed = await sut.SubmitForReviewAsync(Guid.NewGuid(), job.Id, new EditorialTransitionRequest("ready"), CancellationToken.None);
+        Assert.Equal(GenerationJobStatus.NeedsReview, reviewed.Status);
+        var approved = await sut.ApproveGenerationAsync(Guid.NewGuid(), job.Id, new EditorialTransitionRequest("ok"), CancellationToken.None);
+        Assert.Equal(GenerationJobStatus.Approved, approved.Status);
+    }
+
+    [Fact]
+    public async Task Editorial_flow_rejects_approval_without_review()
+    {
+        var jobs = new FakeJobRepository();
+        var job = new ArtworkGenerationJob { Id = Guid.NewGuid(), Status = GenerationJobStatus.PreviewReady };
+        jobs.Items.Add(job);
+        var sut = CreateService(jobs: jobs);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sut.ApproveGenerationAsync(Guid.NewGuid(), job.Id, new EditorialTransitionRequest(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Editorial_flow_can_return_approved_job_to_preview()
+    {
+        var jobs = new FakeJobRepository();
+        var job = new ArtworkGenerationJob { Id = Guid.NewGuid(), Status = GenerationJobStatus.Approved };
+        jobs.Items.Add(job);
+        var sut = CreateService(jobs: jobs);
+        var result = await sut.ReturnToPreviewAsync(Guid.NewGuid(), job.Id, new EditorialTransitionRequest("changes requested"), CancellationToken.None);
+        Assert.Equal(GenerationJobStatus.PreviewReady, result.Status);
+    }
     private static ContentGenerationService CreateService(
         FakeAssetRepository? assets = null,
         FakePresetRepository? presets = null,
@@ -84,6 +175,7 @@ public sealed class ContentGenerationServiceTests
         public List<ArtworkGenerationJob> Items { get; } = [];
         public Task<ArtworkGenerationJob?> GetAsync(Guid id, CancellationToken ct) => Task.FromResult(Items.SingleOrDefault(x => x.Id == id));
         public Task<IReadOnlyCollection<GenerationJobDto>> ListAsync(int take, CancellationToken ct) => Task.FromResult<IReadOnlyCollection<GenerationJobDto>>([]);
+        public Task<IReadOnlyCollection<ArtworkGenerationJob>> ListByBatchAsync(Guid batchId, CancellationToken ct) => Task.FromResult<IReadOnlyCollection<ArtworkGenerationJob>>(Items.Where(x => x.BatchId == batchId).ToArray());
         public Task AddAsync(ArtworkGenerationJob job, CancellationToken ct) { Items.Add(job); return Task.CompletedTask; }
     }
 

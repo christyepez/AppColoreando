@@ -35,10 +35,38 @@ public sealed class ContentGenerationController(IContentGenerationService servic
         return Accepted($"/api/admin/content-generation/jobs/{result.Id}", result);
     }
 
+    [HttpPost("jobs/batch")]
+    public async Task<IActionResult> CreateBatch(CreateGenerationBatchRequest request, CancellationToken ct)
+    {
+        var result = await service.CreateGenerationBatchAsync(UserId(), request, ct);
+        return Accepted($"/api/admin/content-generation/jobs?batchId={result.BatchId}", result);
+    }
+    [HttpGet("jobs/batch/{batchId:guid}")]
+    public async Task<IActionResult> GetBatch(Guid batchId, CancellationToken ct) =>
+        Ok(await service.GetGenerationBatchAsync(batchId, ct));
+
+    [HttpPost("jobs/batch/{batchId:guid}/retry")]
+    public async Task<IActionResult> RetryBatch(Guid batchId, CancellationToken ct) =>
+        Ok(await service.RetryGenerationBatchAsync(UserId(), batchId, ct));
+
+    [HttpPost("jobs/batch/{batchId:guid}/cancel")]
+    public async Task<IActionResult> CancelBatch(Guid batchId, CancellationToken ct) =>
+        Ok(await service.CancelGenerationBatchAsync(UserId(), batchId, ct));
     [HttpGet("jobs")]
     public async Task<IActionResult> GetJobs(CancellationToken ct, [FromQuery] int take = 50) =>
         Ok(await service.GetGenerationJobsAsync(take, ct));
 
+    [HttpPost("jobs/{id:guid}/submit-review")]
+    public async Task<IActionResult> SubmitForReview(Guid id, EditorialTransitionRequest request, CancellationToken ct) =>
+        Ok(await service.SubmitForReviewAsync(UserId(), id, request, ct));
+
+    [HttpPost("jobs/{id:guid}/approve")]
+    public async Task<IActionResult> Approve(Guid id, EditorialTransitionRequest request, CancellationToken ct) =>
+        Ok(await service.ApproveGenerationAsync(UserId(), id, request, ct));
+
+    [HttpPost("jobs/{id:guid}/return-preview")]
+    public async Task<IActionResult> ReturnToPreview(Guid id, EditorialTransitionRequest request, CancellationToken ct) =>
+        Ok(await service.ReturnToPreviewAsync(UserId(), id, request, ct));
     [HttpGet("jobs/{id:guid}")]
     public async Task<IActionResult> GetJob(Guid id, CancellationToken ct)
     {

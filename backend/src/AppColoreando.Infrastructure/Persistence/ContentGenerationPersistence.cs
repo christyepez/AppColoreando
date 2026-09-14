@@ -50,6 +50,10 @@ public sealed class GenerationJobRepository(AppDbContext db) : IGenerationJobRep
                 x.ResultManifestPath, x.CreatedAtUtc, x.StartedAtUtc, x.CompletedAtUtc))
             .ToArrayAsync(ct);
 
+
+    public async Task<IReadOnlyCollection<ArtworkGenerationJob>> ListByBatchAsync(Guid batchId, CancellationToken ct) =>
+        await db.ArtworkGenerationJobs.Where(x => x.BatchId == batchId).OrderBy(x => x.CreatedAtUtc).ToArrayAsync(ct);
+
     public async Task AddAsync(ArtworkGenerationJob job, CancellationToken ct) =>
         await db.ArtworkGenerationJobs.AddAsync(job, ct);
 }

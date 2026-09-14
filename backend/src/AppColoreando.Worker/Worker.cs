@@ -60,6 +60,11 @@ public sealed class Worker(
         var uow = scope.ServiceProvider.GetRequiredService<IUnitOfWork>();
 
         var job = await jobs.GetAsync(jobId, ct) ?? throw new KeyNotFoundException($"Generation job {jobId} not found.");
+        if (job.Status == GenerationJobStatus.Cancelled)
+        {
+            logger.LogInformation("Skipping cancelled generation job {JobId}", jobId);
+            return;
+        }
         var asset = await assets.GetAsync(job.SourceAssetId, ct) ?? throw new KeyNotFoundException("Source asset not found.");
         var preset = await presets.GetAsync(job.StylePresetId, ct) ?? throw new KeyNotFoundException("Style preset not found.");
 

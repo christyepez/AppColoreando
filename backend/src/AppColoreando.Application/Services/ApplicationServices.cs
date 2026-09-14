@@ -190,6 +190,30 @@ public sealed class CatalogService(IArtworkRepository artworks, ICategoryReposit
     public Task<IReadOnlyCollection<CategoryDto>> GetCategoriesAsync(CancellationToken ct) => categories.ListAsync(ct);
     public Task<IReadOnlyCollection<CountryDto>> GetCountriesAsync(CancellationToken ct) => countries.ListAsync(ct);
     public Task<IReadOnlyCollection<CollectionDto>> GetCollectionsAsync(CancellationToken ct) => collections.ListAsync(ct);
+
+    public async Task<DailyContentDto?> GetDailyContentAsync(DateOnly date, CancellationToken ct)
+    {
+        var page = await artworks.SearchAsync(new CatalogQuery(null, null, null, null, null, null, 1, 100), ct);
+        var candidates = page.Items.OrderBy(x => x.Id).ToArray();
+        if (candidates.Length == 0) return null;
+        var dayKey = date.DayNumber;
+        var index = Math.Abs(dayKey % candidates.Length);
+        return new DailyContentDto(date, candidates[index]);
+    }
+
+    public async Task<IReadOnlyCollection<CatalogEventDto>> GetEventsAsync(CancellationToken ct)
+    {
+        var activeCollections = (await collections.ListAsync(ct)).Where(x => x.IsActive && x.ArtworkCount > 0).ToArray();
+        var result = new List<CatalogEventDto>(activeCollections.Length);
+        foreach (var collection in activeCollections)
+        {
+            var page = await artworks.SearchAsync(new CatalogQuery(null, collection.CountryCode, null, collection.Id, null, null, 1, 6), ct);
+            if (page.Items.Count == 0) continue;
+            result.Add(new CatalogEventDto(collection.Id, collection.Name, collection.Slug, collection.Description,
+                collection.CountryCode, collection.ArtworkCount, page.Items));
+        }
+        return result;
+    }
 }
 
 public sealed class UserContentService(
@@ -199,6 +223,7 @@ public sealed class UserContentService(
     IUserActivityRepository activities,
     IUserMetricRepository metrics,
     IUserAchievementRepository achievements,
+    ICollectionRepository collections,
     IUnitOfWork uow) : IUserContentService
 {
     public async Task<IReadOnlyCollection<ProgressDto>> GetProgressAsync(Guid userId, CancellationToken ct) => (await progress.ListAsync(userId, ct)).Select(Map).ToArray();
@@ -241,7 +266,7 @@ public sealed class UserContentService(
         metric.ArtworksOpened++;
         metric.RegionsColored += distinctRegions.Length;
         if (completedNow) metric.ArtworksCompleted++;
-        await AwardAchievements(userId, completedNow, distinctRegions.Length, ct);
+        await AwardAchievements(userId, artworkId, completedNow, ct);
         await uow.SaveChangesAsync(ct);
         return new SyncProgressResponse(Map(item), SyncOperationStatus.Applied, null);
     }
@@ -266,22 +291,76 @@ public sealed class UserContentService(
         return new UserMetricsResponse(daily, data.Sum(x => x.Sessions), data.Sum(x => x.ArtworksOpened), data.Sum(x => x.ArtworksCompleted), data.Sum(x => x.RegionsColored), data.Sum(x => x.ActiveSeconds));
     }
 
+    public async Task<TelemetryIngestResponse> RecordTelemetryAsync(Guid userId, ClientTelemetryBatchRequest request, CancellationToken ct)
+    {
+        var accepted = 0;
+        var rejected = 0;
+        foreach (var item in request.Events.Take(50))
+        {
+            if (!TelemetryRules.IsAllowedEvent(item.EventName)) { rejected++; continue; }
+            activities.Add(new UserActivityHistory
+            {
+                UserId = userId,
+                ArtworkId = item.ArtworkId,
+                ActivityType = "Telemetry:" + item.EventName.Trim(),
+                MetadataJson = JsonSerializer.Serialize(TelemetryRules.SanitizeProperties(item.Properties)),
+                OccurredAtUtc = TelemetryRules.NormalizeOccurredAt(item.OccurredAtUtc, DateTime.UtcNow)
+            });
+            accepted++;
+        }
+        rejected += Math.Max(0, request.Events.Count - 50);
+        if (accepted > 0) await uow.SaveChangesAsync(ct);
+        return new TelemetryIngestResponse(accepted, rejected);
+    }
+    public Task<MonetizationEntitlementsResponse> GetEntitlementsAsync(Guid userId, CancellationToken ct) =>
+        Task.FromResult(MonetizationRules.ForPlan(MonetizationRules.FreePlan));
+
     public async Task<UserAchievementSummary> GetAchievementsAsync(Guid userId, CancellationToken ct)
     {
         var data = await achievements.ListAsync(userId, ct);
         var streak = (await metrics.ListAsync(userId, 30, ct)).OrderByDescending(x => x.MetricDate).TakeWhile(x => x.ArtworksOpened > 0 || x.RegionsColored > 0).Count();
-        return new UserAchievementSummary(data.Sum(x => x.XpAwarded), streak, data.Select(x => new AchievementDto(x.Code, x.Name, x.XpAwarded, x.EarnedAtUtc)).ToArray());
+        var xp = data.Sum(x => x.XpAwarded);
+        var progression = GamificationRules.Progression(xp);
+        return new UserAchievementSummary(xp, progression.Level, progression.CurrentLevelXp, progression.NextLevelXp, streak, data.Select(x => new AchievementDto(x.Code, x.Name, x.XpAwarded, x.EarnedAtUtc)).ToArray());
     }
 
-    private async Task AwardAchievements(Guid userId, bool completedNow, int regions, CancellationToken ct)
+    private async Task AwardAchievements(Guid userId, Guid artworkId, bool completedNow, CancellationToken ct)
     {
-        foreach (var rule in GamificationRules.Evaluate(completedNow, regions))
+        var allMetrics = await metrics.ListAsync(userId, 90, ct);
+        var totalCompleted = allMetrics.Sum(x => x.ArtworksCompleted);
+        var totalRegions = allMetrics.Sum(x => x.RegionsColored);
+        var streak = allMetrics.OrderByDescending(x => x.MetricDate)
+            .TakeWhile(x => x.ArtworksOpened > 0 || x.RegionsColored > 0).Count();
+
+        var completedDaily = completedNow && await IsDailyArtworkAsync(artworkId, ct);
+        var completedEvent = completedNow && await IsEventArtworkAsync(artworkId, ct);
+        foreach (var rule in GamificationRules.Evaluate(totalCompleted, totalRegions, streak, completedDaily, completedEvent))
         {
             if (!await achievements.ExistsAsync(userId, rule.Code, ct))
             {
                 achievements.Add(new UserAchievement { UserId = userId, Code = rule.Code, Name = rule.Name, XpAwarded = rule.XpAwarded });
             }
         }
+    }
+
+    private async Task<bool> IsDailyArtworkAsync(Guid artworkId, CancellationToken ct)
+    {
+        var page = await artworks.SearchAsync(new CatalogQuery(null, null, null, null, null, null, 1, 100), ct);
+        var candidates = page.Items.OrderBy(x => x.Id).ToArray();
+        if (candidates.Length == 0) return false;
+        var index = Math.Abs(DateOnly.FromDateTime(DateTime.UtcNow).DayNumber % candidates.Length);
+        return candidates[index].Id == artworkId;
+    }
+
+    private async Task<bool> IsEventArtworkAsync(Guid artworkId, CancellationToken ct)
+    {
+        var active = (await collections.ListAsync(ct)).Where(x => x.IsActive && x.ArtworkCount > 0);
+        foreach (var summary in active)
+        {
+            var collection = await collections.GetAsync(summary.Id, ct);
+            if (collection?.Artworks.Any(x => x.ArtworkId == artworkId) == true) return true;
+        }
+        return false;
     }
 
     private static ProgressDto Map(UserArtworkProgress x)

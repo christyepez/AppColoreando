@@ -22,6 +22,7 @@ public interface IGenerationJobRepository
 {
     Task<ArtworkGenerationJob?> GetAsync(Guid id, CancellationToken ct);
     Task<IReadOnlyCollection<GenerationJobDto>> ListAsync(int take, CancellationToken ct);
+    Task<IReadOnlyCollection<ArtworkGenerationJob>> ListByBatchAsync(Guid batchId, CancellationToken ct);
     Task AddAsync(ArtworkGenerationJob job, CancellationToken ct);
 }
 
@@ -44,7 +45,15 @@ public interface IContentGenerationService
     Task<IReadOnlyCollection<StylePresetDto>> GetStylePresetsAsync(CancellationToken ct);
     Task<GenerationJobDto> CreateGenerationJobAsync(
         Guid userId, CreateGenerationJobRequest request, CancellationToken ct);
+    Task<GenerationBatchDto> CreateGenerationBatchAsync(
+        Guid userId, CreateGenerationBatchRequest request, CancellationToken ct);
+    Task<GenerationJobDto> SubmitForReviewAsync(Guid userId, Guid id, EditorialTransitionRequest request, CancellationToken ct);
+    Task<GenerationJobDto> ApproveGenerationAsync(Guid userId, Guid id, EditorialTransitionRequest request, CancellationToken ct);
+    Task<GenerationJobDto> ReturnToPreviewAsync(Guid userId, Guid id, EditorialTransitionRequest request, CancellationToken ct);
     Task<GenerationJobDto?> GetGenerationJobAsync(Guid id, CancellationToken ct);
+    Task<GenerationBatchStatusDto> GetGenerationBatchAsync(Guid batchId, CancellationToken ct);
+    Task<GenerationBatchStatusDto> RetryGenerationBatchAsync(Guid userId, Guid batchId, CancellationToken ct);
+    Task<GenerationBatchStatusDto> CancelGenerationBatchAsync(Guid userId, Guid batchId, CancellationToken ct);
     Task<IReadOnlyCollection<GenerationJobDto>> GetGenerationJobsAsync(int take, CancellationToken ct);
     Task<GenerationArtifactDto?> GetGenerationArtifactAsync(Guid jobId, string artifactKind, CancellationToken ct);
     Task<IReadOnlyCollection<RegionAdjustmentDto>> GetGenerationAdjustmentsAsync(Guid jobId, CancellationToken ct);

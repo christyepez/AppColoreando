@@ -43,6 +43,12 @@ public sealed class UserContentController(IUserContentService service, IUserAcco
     [HttpGet("metrics")]
     public async Task<IActionResult> GetMetrics(CancellationToken ct) => Ok(await service.GetMetricsAsync(UserId(), ct));
 
+    [HttpPost("telemetry")]
+    public async Task<IActionResult> RecordTelemetry(ClientTelemetryBatchRequest request, CancellationToken ct)
+        => Ok(await service.RecordTelemetryAsync(UserId(), request, ct));
+    [HttpGet("entitlements")]
+    public async Task<IActionResult> GetEntitlements(CancellationToken ct) => Ok(await service.GetEntitlementsAsync(UserId(), ct));
+
     [HttpGet("achievements")]
     public async Task<IActionResult> GetAchievements(CancellationToken ct) => Ok(await service.GetAchievementsAsync(UserId(), ct));
 

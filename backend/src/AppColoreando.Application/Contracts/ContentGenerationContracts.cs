@@ -18,6 +18,27 @@ public sealed record CreateGenerationJobRequest(
     Guid StylePresetId,
     GenerationDifficulty Difficulty = GenerationDifficulty.Normal);
 
+public sealed record CreateGenerationBatchRequest(
+    IReadOnlyCollection<Guid> SourceAssetIds,
+    Guid StylePresetId,
+    GenerationDifficulty Difficulty = GenerationDifficulty.Normal);
+
+public sealed record GenerationBatchDto(
+    Guid BatchId,
+    int RequestedCount,
+    int QueuedCount,
+    IReadOnlyCollection<GenerationJobDto> Jobs);
+public sealed record GenerationBatchStatusDto(
+    Guid BatchId,
+    int TotalCount,
+    int QueuedCount,
+    int RunningCount,
+    int ReadyCount,
+    int FailedCount,
+    int CancelledCount,
+    int CompletedCount,
+    double ProgressPercent,
+    IReadOnlyCollection<GenerationJobDto> Jobs);
 public sealed record GenerationJobDto(
     Guid Id, Guid SourceAssetId, Guid StylePresetId,
     GenerationDifficulty Difficulty, GenerationJobStatus Status,
@@ -46,6 +67,8 @@ public sealed record RegionAdjustmentDto(
     string? Note,
     Guid UpdatedByUserId,
     DateTime UpdatedAtUtc);
+
+public sealed record EditorialTransitionRequest(string? Note = null);
 
 public sealed record PublishGenerationRequest(
     string Title,

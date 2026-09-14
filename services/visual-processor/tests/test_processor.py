@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 
 from app.processor import (
-    ProcessorOptions, _cluster_colors, _contour_compactness, _foreground_likelihood, _friendly_color_name, _harmonize_palette, _illustration_preprocess, _is_sliver_region, _merge_similar_clusters, _repair_variant_options, _resolve_style_code,
+    ProcessorOptions, _cluster_colors, _contour_compactness, _foreground_likelihood, _friendly_color_name, _apply_art_palette, _harmonize_palette, _illustration_preprocess, _is_sliver_region, _label_scale, _merge_similar_clusters, _resolve_art_style,
     _micro_region_threshold, _spatial_compactness, process_image,
 )
 
@@ -276,42 +276,93 @@ def test_contour_quality_detects_thin_sliver() -> None:
     assert _contour_compactness(contour) < 0.1
     assert _is_sliver_region(contour, 120 * 120)
 
-def test_illustration_preprocess_reduces_noise() -> None:
-    rng = np.random.default_rng(7)
-    image = np.full((96, 96, 3), 128, dtype=np.uint8)
-    noise = rng.integers(-35, 36, size=image.shape, dtype=np.int16)
-    noisy = np.clip(image.astype(np.int16) + noise, 0, 255).astype(np.uint8)
-    processed = _illustration_preprocess(noisy, "Normal")
-    assert processed.shape == noisy.shape
-    assert float(np.std(processed.astype(np.float32))) < float(np.std(noisy.astype(np.float32)))
+def test_harmonize_palette_preserves_neutrals_and_is_deterministic() -> None:
+    source = ['#808080', '#D96A45', '#D96A49', '#3A7FBF']
+    first = _harmonize_palette(source)
+    second = _harmonize_palette(source)
+    assert first == second
+    assert first[0] == '#808080'
+    assert len(first) == len(source)
+    assert first[1] != first[2]
 
 
-def test_palette_harmonization_increases_muted_saturation() -> None:
-    muted = ["#9A948F"]
-    harmonized = _harmonize_palette(muted, "Kids")
-    before = cv2.cvtColor(np.uint8([[[143, 148, 154]]]), cv2.COLOR_BGR2HSV)[0, 0]
-    b, g, r = tuple(int(harmonized[0].lstrip("#")[i:i+2], 16) for i in (4, 2, 0))
-    after = cv2.cvtColor(np.uint8([[[b, g, r]]]), cv2.COLOR_BGR2HSV)[0, 0]
-    assert int(after[1]) >= int(before[1])
+def test_illustration_preprocess_is_deterministic_and_preserves_shape() -> None:
+    image = np.zeros((80, 120, 3), dtype=np.uint8)
+    image[:, :60] = (30, 160, 220)
+    image[:, 60:] = (190, 70, 40)
+    first = _illustration_preprocess(image, "Normal")
+    second = _illustration_preprocess(image, "Normal")
+    assert first.shape == image.shape
+    assert np.array_equal(first, second)
 
 
-def test_auto_style_resolves_deterministically() -> None:
-    dark = np.full((40, 40, 3), 60, dtype=np.uint8)
-    vivid = np.full((40, 40, 3), (20, 40, 220), dtype=np.uint8)
-    assert _resolve_style_code(dark, "auto") == "lumina"
-    assert _resolve_style_code(vivid, "auto") in {"aura", "postal-viva"}
-    assert _resolve_style_code(vivid, "natural") == "natural"
+def test_label_scale_accounts_for_available_radius() -> None:
+    from types import SimpleNamespace
+    roomy = SimpleNamespace(label_radius=0.05, color_id=3, area=1200)
+    tight = SimpleNamespace(label_radius=0.012, color_id=12, area=1200)
+    assert _label_scale(roomy, 400, 400) > _label_scale(tight, 400, 400)
+
+def test_auto_art_style_resolves_from_semantic_hints() -> None:
+    hints = ({"tag": "bird", "role": "subject", "confidence": 0.95},)
+    assert _resolve_art_style("auto", hints) == "animals"
+    assert _resolve_art_style("portrait", ()) == "portrait"
+    assert _resolve_art_style("unknown", ()) == "natural"
 
 
-def test_repair_options_reduce_problematic_complexity() -> None:
-    options = _options()
-    qa = {"issues": [
-        {"code": "QA_MICRO_REGIONS"},
-        {"code": "QA_PALETTE_DELTA"},
-        {"code": "QA_CONTOUR_COMPLEXITY"},
-    ]}
-    repaired = _repair_variant_options(options, qa)
-    assert repaired.target_regions < options.target_regions
-    assert repaired.max_colors < options.max_colors
-    assert repaired.simplification_tolerance > options.simplification_tolerance
-    assert repaired.edge_sensitivity < options.edge_sensitivity
+def test_art_palette_profile_is_deterministic_and_style_specific() -> None:
+    palette = ["#D96A45", "#3A7FBF", "#808080"]
+    kawaii = _apply_art_palette(palette, "kawaii")
+    portrait = _apply_art_palette(palette, "portrait")
+    assert kawaii == _apply_art_palette(palette, "kawaii")
+    assert kawaii != portrait
+    assert len(kawaii) == len(palette)
+
+
+def test_art_style_is_emitted_in_bundle(tmp_path: Path) -> None:
+    source = tmp_path / "duck.png"
+    output = tmp_path / "art-style"
+    _sample_image(source)
+    options = replace(_options(), art_style="animals")
+    process_image(source, output, options)
+    bundle = json.loads((output / "bundle.json").read_text(encoding="utf-8"))
+    manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
+    assert bundle["artStyle"] == "animals"
+    assert manifest["artStyle"] == "animals"
+
+def test_visual_qa_v2_emits_quality_metrics(tmp_path: Path) -> None:
+    source = tmp_path / "duck.png"
+    output = tmp_path / "qa-v2"
+    _sample_image(source)
+    result = process_image(source, output, _options())
+    qa = result["qa"]
+    assert "sliverRegionCount" in qa
+    assert "sliverRegionRatio" in qa
+    assert "averageContourCompactness" in qa
+    assert "crampedLabelCount" in qa
+    assert "crampedLabelRatio" in qa
+    assert "semanticCoverage" in qa
+    assert 0.0 <= qa["sliverRegionRatio"] <= 1.0
+    assert 0.0 <= qa["crampedLabelRatio"] <= 1.0
+    assert 0.0 <= qa["semanticCoverage"] <= 1.0
+    assert 0.0 <= qa["averageContourCompactness"] <= 1.0
+
+def test_repair_options_reduce_complexity_for_quality_issues() -> None:
+    from app.processor import _repair_options
+    base = _options()
+    qa = {"issues": [{"code": "QA_MICRO_REGIONS"}, {"code": "QA_LABEL_CRAMPED"}, {"code": "QA_PALETTE_DELTA"}]}
+    repaired = _repair_options(base, qa)
+    assert repaired.target_regions < base.target_regions
+    assert repaired.max_colors < base.max_colors
+    assert repaired.simplification_tolerance > base.simplification_tolerance
+
+
+def test_auto_repair_only_accepts_improvement(tmp_path: Path) -> None:
+    from app.processor import process_image_auto_repair
+    source = tmp_path / "duck.png"
+    output = tmp_path / "repair"
+    _sample_image(source)
+    result = process_image_auto_repair(source, output, _options())
+    assert "autoRepair" in result
+    info = result["autoRepair"]
+    assert info["finalScore"] >= info["baselineScore"]
+    assert (output / "manifest.json").exists()

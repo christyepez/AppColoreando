@@ -58,6 +58,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
         b.Entity<SourceAsset>().Property(x => x.Status).HasConversion<string>();
         b.Entity<StylePreset>().HasIndex(x => x.Code).IsUnique();
         b.Entity<ArtworkGenerationJob>().HasIndex(x => new { x.Status, x.CreatedAtUtc });
+        b.Entity<ArtworkGenerationJob>().HasIndex(x => x.BatchId);
         b.Entity<ArtworkGenerationJob>().Property(x => x.Status).HasConversion<string>();
         b.Entity<ArtworkGenerationJob>().Property(x => x.Difficulty).HasConversion<string>();
         b.Entity<ArtworkGenerationIssue>().HasIndex(x => x.ArtworkGenerationJobId);

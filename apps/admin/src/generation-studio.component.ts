@@ -98,6 +98,8 @@ export class GenerationStudioComponent {
   readonly palette = signal<{ id: number; hex: string; name: string }[]>([]);
   readonly adjustments = signal<RegionAdjustment[]>([]);
   readonly savingAdjustment = signal(false);
+  readonly transitioning = signal(false);
+  editorialNote = '';
   editRegionId = 0;
   editColorHex = '';
   editSemanticTag = '';
@@ -198,7 +200,7 @@ export class GenerationStudioComponent {
   presetName(id: string) { return this.presets().find(x => x.id === id)?.name ?? id.slice(0, 8); }
   difficultyName(value: number | string) { return typeof value === 'number' ? (this.difficulties[value]?.label ?? String(value)) : value; }
   statusName(value: number | string) {
-    const names = ['Pending', 'Queued', 'Running', 'Preview ready', 'Needs review', 'Approved', 'Published', 'Failed'];
+    const names = ['Pending', 'Queued', 'Running', 'Preview ready', 'Needs review', 'Approved', 'Published', 'Failed', 'Cancelled'];
     return typeof value === 'number' ? (names[value] ?? String(value)) : value;
   }
   isSpecial(code: string) { return ['aura', 'tesoro', 'revela', 'postal-viva', 'lumina', 'eclipse'].includes(code); }
@@ -206,6 +208,19 @@ export class GenerationStudioComponent {
     return ({ aura: 'Aura', tesoro: 'Tesoro', revela: 'Revela', 'postal-viva': 'Postal Viva', lumina: 'Lumina', eclipse: 'Eclipse' } as Record<string, string>)[code] ?? code;
   }
 
+  isStatus(value: number | string, numeric: number, text: string) {
+    return typeof value === 'number' ? value === numeric : value.toLowerCase() === text.toLowerCase();
+  }
+  editorialTransition(action: 'submit-review' | 'approve' | 'return-preview') {
+    const job = this.selectedJob();
+    if (!job) return;
+    this.transitioning.set(true); this.error.set('');
+    const url = apiBase + '/admin/content-generation/jobs/' + job.id + '/' + action;
+    this.http.post<GenerationJob>(url, { note: this.editorialNote.trim() || null }).subscribe({
+      next: updated => { this.selectedJob.set(updated); this.transitioning.set(false); this.editorialNote = ''; this.reloadJobs(); },
+      error: () => { this.error.set('Editorial transition failed.'); this.transitioning.set(false); }
+    });
+  }
   selectedRegion() { return this.regions().find(x => x.id === Number(this.editRegionId)); }
   regionColor(region: GeneratedRegion) { return this.palette().find(x => x.id === region.colorId)?.hex ?? ('color ' + region.colorId); }
   selectRegion(value: number) {

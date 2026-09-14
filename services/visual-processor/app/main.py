@@ -4,9 +4,9 @@ from uuid import UUID
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
-from app.processor import ProcessorOptions, process_image, process_variants
+from app.processor import ProcessorOptions, process_image, process_image_auto_repair, process_variants
 
-app = FastAPI(title="AppColoreando Visual Processor", version="0.19.0")
+app = FastAPI(title="AppColoreando Visual Processor", version="0.15.0")
 OUTPUT_ROOT = Path("/content-data/generation-jobs")
 
 
@@ -32,10 +32,11 @@ class ProcessRequest(BaseModel):
     saturationBoost: float
     contrastBoost: float
     generateVariants: bool = True
+    artStyle: str = Field(default="auto", min_length=1, max_length=32)
     semanticHints: list[SemanticHint] = Field(default_factory=list)
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "healthy", "engine": "s39-generation-engine-v2"}
+    return {"status": "healthy", "engine": "s39-auto-repair-engine"}
 
 
 @app.post("/process")
@@ -60,6 +61,7 @@ def process(request: ProcessRequest) -> dict:
         contrast_boost=request.contrastBoost,
         difficulty=request.difficulty,
         style_code=request.presetCode,
+        art_style=request.artStyle,
         semantic_hints=tuple(h.model_dump() for h in request.semanticHints),
     )
     try:
@@ -67,7 +69,7 @@ def process(request: ProcessRequest) -> dict:
         result = (
             process_variants(source, job_output, options, request.difficulty)
             if request.generateVariants
-            else process_image(source, job_output, options)
+            else process_image_auto_repair(source, job_output, options)
         )
         return {
             "success": True,

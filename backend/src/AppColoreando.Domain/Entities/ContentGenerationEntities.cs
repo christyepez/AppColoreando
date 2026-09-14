@@ -7,7 +7,7 @@ public enum SourceAssetStatus
 
 public enum GenerationJobStatus
 {
-    Pending, Queued, Running, PreviewReady, NeedsReview, Approved, Published, Failed
+    Pending, Queued, Running, PreviewReady, NeedsReview, Approved, Published, Failed, Cancelled
 }
 
 public enum GenerationDifficulty
@@ -45,6 +45,7 @@ public sealed class StylePreset : AuditableEntity
 
 public sealed class ArtworkGenerationJob : AuditableEntity
 {
+    public Guid? BatchId { get; set; }
     public Guid SourceAssetId { get; set; }
     public Guid StylePresetId { get; set; }
     public GenerationDifficulty Difficulty { get; set; } = GenerationDifficulty.Normal;

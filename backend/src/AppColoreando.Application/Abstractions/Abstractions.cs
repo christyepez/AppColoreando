@@ -141,6 +141,8 @@ public interface ICatalogService
     Task<IReadOnlyCollection<CategoryDto>> GetCategoriesAsync(CancellationToken ct);
     Task<IReadOnlyCollection<CountryDto>> GetCountriesAsync(CancellationToken ct);
     Task<IReadOnlyCollection<CollectionDto>> GetCollectionsAsync(CancellationToken ct);
+    Task<DailyContentDto?> GetDailyContentAsync(DateOnly date, CancellationToken ct);
+    Task<IReadOnlyCollection<CatalogEventDto>> GetEventsAsync(CancellationToken ct);
 }
 
 public interface IUserContentService
@@ -151,6 +153,8 @@ public interface IUserContentService
     Task<IReadOnlyCollection<UserActivityDto>> GetHistoryAsync(Guid userId, CancellationToken ct);
     Task<UserMetricsResponse> GetMetricsAsync(Guid userId, CancellationToken ct);
     Task<UserAchievementSummary> GetAchievementsAsync(Guid userId, CancellationToken ct);
+    Task<TelemetryIngestResponse> RecordTelemetryAsync(Guid userId, ClientTelemetryBatchRequest request, CancellationToken ct);
+    Task<MonetizationEntitlementsResponse> GetEntitlementsAsync(Guid userId, CancellationToken ct);
 }
 
 public interface IAdminService

@@ -3,7 +3,10 @@ import 'dart:math' as math;
 import 'package:app_coloreando/src/catalog/demo_artwork.dart';
 import 'package:app_coloreando/src/catalog/generated_artwork_repository.dart';
 import 'package:app_coloreando/src/coloring/local_progress_store.dart';
+import 'package:app_coloreando/src/coloring/local_library_store.dart';
+import 'package:app_coloreando/src/telemetry/telemetry_repository.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ColoringPage extends ConsumerStatefulWidget {
@@ -21,6 +24,9 @@ class _ColoringPageState extends ConsumerState<ColoringPage> {
   int _paintRevision = 0;
   Timer? _saveDebounce;
   DemoArtwork? _artwork;
+  final TransformationController _transformController = TransformationController();
+  double _zoomScale = 1.0;
+  bool _isFavorite = false;
 
   @override
   void initState() {
@@ -32,8 +38,13 @@ class _ColoringPageState extends ConsumerState<ColoringPage> {
     final generated = await ref.read(generatedArtworkRepositoryProvider).load(widget.artworkId);
     final artwork = generated ?? demoArtworkById(widget.artworkId);
     final stored = await ref.read(localProgressStoreProvider).load(widget.artworkId);
+    final library = ref.read(localLibraryStoreProvider);
+    final favorite = await library.isFavorite(widget.artworkId);
+    await library.markRecent(widget.artworkId);
+    unawaited(ref.read(telemetryRepositoryProvider).track('artwork_open', artworkId: widget.artworkId, properties: {'source': generated == null ? 'demo' : 'catalog'}));
+    ref.invalidate(localLibrarySnapshotProvider);
     if (!mounted) return;
-    setState(() { _artwork = artwork; completed = stored; selectedColorId = artwork.palette.first.id; });
+    setState(() { _artwork = artwork; completed = stored; selectedColorId = artwork.palette.first.id; _isFavorite = favorite; });
   }
 
   Future<void> _save() async {
@@ -74,7 +85,19 @@ class _ColoringPageState extends ConsumerState<ColoringPage> {
           Text('${(progress * 100).round()}% completado', style: const TextStyle(fontSize: 11, color: Colors.black45, fontWeight: FontWeight.w600)),
         ]),
         actions: [
-          IconButton(tooltip: 'Deshacer', icon: const Icon(Icons.undo_rounded), onPressed: lastCompleted == null ? null : () {
+                    IconButton(
+            tooltip: _isFavorite ? 'Quitar de favoritos' : 'Agregar a favoritos',
+            icon: Icon(_isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded),
+            onPressed: () async {
+              final next = !_isFavorite;
+              setState(() => _isFavorite = next);
+              await ref.read(localLibraryStoreProvider).setFavorite(widget.artworkId, next);
+              unawaited(ref.read(telemetryRepositoryProvider).track('artwork_favorite', artworkId: widget.artworkId, properties: {'source': next ? 'add' : 'remove'}));
+              ref.invalidate(localLibrarySnapshotProvider);
+              HapticFeedback.selectionClick();
+            },
+          ),
+IconButton(tooltip: 'Deshacer', icon: const Icon(Icons.undo_rounded), onPressed: lastCompleted == null ? null : () {
             setState(() {
               completed.remove(lastCompleted);
               _paintRevision++;
@@ -111,7 +134,7 @@ class _ColoringPageState extends ConsumerState<ColoringPage> {
                       child: LayoutBuilder(builder: (context, constraints) => GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTapUp: (details) => _tap(details.localPosition, Size(constraints.maxWidth, constraints.maxHeight), artwork),
-                        child: RepaintBoundary(child: CustomPaint(painter: ColoringPainter(artwork: artwork, selectedColorId: selectedColorId, completedRegionIds: completed, highlightedRegionId: highlightedRegionId, paintRevision: _paintRevision))),
+                        child: RepaintBoundary(child: CustomPaint(painter: ColoringPainter(artwork: artwork, selectedColorId: selectedColorId, completedRegionIds: completed, highlightedRegionId: highlightedRegionId, paintRevision: _paintRevision, currentScale: _zoomScale))),
                       )),
                     ),
                   ),
@@ -227,12 +250,13 @@ class ArtworkSpatialIndex {
 }
 
 class ColoringPainter extends CustomPainter {
-  ColoringPainter({required this.artwork, required this.selectedColorId, required this.completedRegionIds, required this.highlightedRegionId, required this.paintRevision});
+  ColoringPainter({required this.artwork, required this.selectedColorId, required this.completedRegionIds, required this.highlightedRegionId, required this.paintRevision, required this.currentScale});
   final DemoArtwork artwork;
   final int selectedColorId;
   final Set<int> completedRegionIds;
   final int? highlightedRegionId;
   final int paintRevision;
+  final double currentScale;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -248,7 +272,8 @@ class ColoringPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = highlighted ? 3 : (active ? 1.25 : .8)
         ..color = highlighted ? const Color(0xFFE75D70) : (active ? const Color(0xFF8A8883) : const Color(0xFFD7D3CC)));
-      if (!done && region.labelVisibleAtBase && (active || highlighted)) {
+      final showLabel = region.labelVisibleAtBase || currentScale >= region.labelMinZoom;
+      if (!done && showLabel && (active || highlighted)) {
         text.text = TextSpan(text: '${region.colorId}', style: TextStyle(color: highlighted ? const Color(0xFFE75D70) : const Color(0xFF55524D), fontSize: (size.shortestSide / 34).clamp(9, 14), fontWeight: FontWeight.w700));
         text.layout();
         final anchor = region.labelOffset ?? region.rect.center;
@@ -267,5 +292,5 @@ class ColoringPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant ColoringPainter oldDelegate) => oldDelegate.artwork != artwork || oldDelegate.selectedColorId != selectedColorId || oldDelegate.highlightedRegionId != highlightedRegionId || oldDelegate.paintRevision != paintRevision;
+  bool shouldRepaint(covariant ColoringPainter oldDelegate) => oldDelegate.artwork != artwork || oldDelegate.selectedColorId != selectedColorId || oldDelegate.highlightedRegionId != highlightedRegionId || oldDelegate.paintRevision != paintRevision || oldDelegate.currentScale != currentScale;
 }
