@@ -1,0 +1,139 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: appcoloreando
+      POSTGRES_USER: appcoloreando
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports: ["127.0.0.1:${POSTGRES_PORT:-5432}:5432"]
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U appcoloreando -d appcoloreando"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports: ["127.0.0.1:${REDIS_PORT:-6379}:6379"]
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    restart: unless-stopped
+    ports: ["127.0.0.1:${RABBITMQ_PORT:-5672}:5672", "127.0.0.1:${RABBITMQ_UI_PORT:-15672}:15672"]
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-appcoloreando}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-appcoloreando}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports: ["127.0.0.1:${MINIO_PORT:-9000}:9000", "127.0.0.1:${MINIO_UI_PORT:-9001}:9001"]
+    volumes: [minio_data:/data]
+
+  content-init:
+    image: alpine:3.22
+    command: ["sh", "-c", "mkdir -p /content-data/source-assets /content-data/generation-jobs /content-data/published && chown -R 1654:1654 /content-data"]
+    volumes: [content_data:/content-data]
+    restart: "no"
+
+  api:
+    image: christyepez/appcoloreando-api:${APPCOLOREANDO_VERSION:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=appcoloreando;Username=appcoloreando;Password=${POSTGRES_PASSWORD}
+      Jwt__Key: ${JWT_KEY}
+      Jwt__Issuer: AppColoreando
+      Jwt__Audience: AppColoreando.MobileAdmin
+      Database__ApplyMigrationsOnStartup: "true"
+      Seed__Enabled: "true"
+      Seed__AdminEmail: ${SEED__ADMINEMAIL:-}
+      Seed__AdminPassword: ${SEED__ADMINPASSWORD:-}
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__User: ${RABBITMQ_USER:-appcoloreando}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD}
+      ContentGeneration__SourceAssetRoot: /content-data/source-assets
+      ContentGeneration__PublishedRoot: /content-data/published
+      Cors__AllowedOrigins__0: http://localhost:${ADMIN_PORT:-4200}
+      Cors__AllowedOrigins__1: http://localhost:${WEB_PORT:-8083}
+    ports: ["${API_PORT:-8080}:8080"]
+    volumes: [content_data:/content-data]
+    depends_on:
+      content-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  visual-processor:
+    image: christyepez/appcoloreando-visual-processor:${APPCOLOREANDO_VERSION:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    user: "1654:1654"
+    ports: ["${VISUAL_PROCESSOR_PORT:-8090}:8090"]
+    volumes: [content_data:/content-data]
+    depends_on:
+      content-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  worker:
+    image: christyepez/appcoloreando-worker:${APPCOLOREANDO_VERSION:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    environment:
+      DOTNET_ENVIRONMENT: ${DOTNET_ENVIRONMENT:-Development}
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=appcoloreando;Username=appcoloreando;Password=${POSTGRES_PASSWORD}
+      Jwt__Key: ${JWT_KEY}
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__User: ${RABBITMQ_USER:-appcoloreando}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD}
+      VisualProcessor__BaseUrl: http://visual-processor:8090/
+    volumes: [content_data:/content-data]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      visual-processor:
+        condition: service_healthy
+
+  admin:
+    image: christyepez/appcoloreando-admin:${APPCOLOREANDO_VERSION:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    ports: ["${ADMIN_PORT:-4200}:80"]
+    depends_on: [api]
+
+  webapp:
+    image: christyepez/appcoloreando-web:${APPCOLOREANDO_VERSION:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    ports: ["${WEB_PORT:-8083}:80"]
+    depends_on: [api]
+
+volumes:
+  postgres_data:
+  minio_data:
+  content_data:

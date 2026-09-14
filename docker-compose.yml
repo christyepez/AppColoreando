@@ -5,10 +5,8 @@ services:
       POSTGRES_DB: appcoloreando
       POSTGRES_USER: appcoloreando
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: [postgres_data:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U appcoloreando -d appcoloreando"]
       interval: 10s
@@ -17,8 +15,34 @@ services:
 
   redis:
     image: redis:7-alpine
-    ports:
-      - "6379:6379"
+    ports: ["127.0.0.1:6379:6379"]
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    ports: ["127.0.0.1:5672:5672", "127.0.0.1:15672:15672"]
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-appcoloreando}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-appcoloreando}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports: ["127.0.0.1:9000:9000", "127.0.0.1:9001:9001"]
+    volumes: [minio_data:/data]
+
+  content-init:
+    image: alpine:3.22
+    command: ["sh", "-c", "mkdir -p /content-data/source-assets /content-data/generation-jobs /content-data/published && chown -R 1654:1654 /content-data"]
+    volumes: [content_data:/content-data]
+    restart: "no"
 
   api:
     build:
@@ -31,25 +55,97 @@ services:
       Jwt__Key: ${JWT_KEY}
       Jwt__Issuer: AppColoreando
       Jwt__Audience: AppColoreando.MobileAdmin
+      Database__ApplyMigrationsOnStartup: "true"
+      Seed__Enabled: "true"
+      Seed__AdminEmail: ${SEED__ADMINEMAIL:-}
+      Seed__AdminPassword: ${SEED__ADMINPASSWORD:-}
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__User: ${RABBITMQ_USER:-appcoloreando}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD}
+      ContentGeneration__SourceAssetRoot: /content-data/source-assets
+      ContentGeneration__PublishedRoot: /content-data/published
       Cors__AllowedOrigins__0: http://localhost:4200
-    ports:
-      - "8080:8080"
+      Cors__AllowedOrigins__1: http://localhost:8083
+    ports: ["8080:8080"]
+    volumes: [content_data:/content-data]
     depends_on:
+      content-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
         condition: service_started
+      rabbitmq:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: src/AppColoreando.Worker/Dockerfile
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=appcoloreando;Username=appcoloreando;Password=${POSTGRES_PASSWORD}
+      Jwt__Key: ${JWT_KEY}
+      RabbitMQ__Host: rabbitmq
+      RabbitMQ__User: ${RABBITMQ_USER:-appcoloreando}
+      RabbitMQ__Password: ${RABBITMQ_PASSWORD}
+      VisualProcessor__BaseUrl: http://visual-processor:8090/
+    volumes: [content_data:/content-data]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      visual-processor:
+        condition: service_healthy
+
+  visual-processor:
+    user: "1654:1654"
+    depends_on:
+      content-init:
+        condition: service_completed_successfully
+    build:
+      context: ./services/visual-processor
+      dockerfile: Dockerfile
+    ports: ["8090:8090"]
+    volumes: [content_data:/content-data]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8090/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   admin:
     image: node:22-alpine
     working_dir: /app
-    command: sh -c "npm install && npm start -- --host 0.0.0.0"
+    command: sh -c "npm ci && npm start -- --host 0.0.0.0"
+    volumes: [./apps/admin:/app]
+    ports: ["4200:4200"]
+    depends_on: [api]
+
+  webapp:
+    image: nginx:1.27-alpine
+    profiles: ["web"]
     volumes:
-      - ./apps/admin:/app
-    ports:
-      - "4200:4200"
-    depends_on:
-      - api
+      - ./apps/mobile/build/web:/usr/share/nginx/html:ro
+      - ./infrastructure/nginx/appcoloreando-web.conf:/etc/nginx/conf.d/default.conf:ro
+    ports: ["8083:80"]
+    depends_on: [api]
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./infrastructure/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["127.0.0.1:9090:9090"]
+    depends_on: [api]
+
+  grafana:
+    image: grafana/grafana-oss:latest
+    ports: ["127.0.0.1:3000:3000"]
+    volumes: [grafana_data:/var/lib/grafana]
+    depends_on: [prometheus]
 
 volumes:
   postgres_data:
+  minio_data:
+  grafana_data:
+  content_data:

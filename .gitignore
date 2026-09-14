@@ -1,0 +1,18 @@
+﻿**/bin/
+**/obj/
+**/node_modules/
+.env
+.dart_tool/
+.flutter-plugins*
+.idea/
+.vscode/
+*.user
+*.suo
+
+# Python / Visual Processor
+**/__pycache__/
+**/.pytest_cache/
+*.py[cod]
+
+# Local Docker Hub deployment secrets
+.env.hub
