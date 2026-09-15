@@ -59,6 +59,7 @@ services:
       Seed__Enabled: "true"
       Seed__AdminEmail: ${SEED__ADMINEMAIL:-}
       Seed__AdminPassword: ${SEED__ADMINPASSWORD:-}
+      Seed__ResetAdminPassword: ${SEED__RESETADMINPASSWORD:-false}
       RabbitMQ__Host: rabbitmq
       RabbitMQ__User: ${RABBITMQ_USER:-appcoloreando}
       RabbitMQ__Password: ${RABBITMQ_PASSWORD}

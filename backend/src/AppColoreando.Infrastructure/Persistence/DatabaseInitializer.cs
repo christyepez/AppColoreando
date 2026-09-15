@@ -74,15 +74,25 @@ public static class DatabaseInitializer
             if (!await db.Collections.AnyAsync(x => x.Slug == collection.Item2, ct)) db.Collections.Add(new Collection { Name = collection.Item1, Slug = collection.Item2, CountryCode = collection.Item3, Description = "Safe original demo collection." });
         }
 
-        var adminEmail = configuration["Seed:AdminEmail"];
+        var adminEmail = configuration["Seed:AdminEmail"]?.Trim().ToLowerInvariant();
         var adminPassword = configuration["Seed:AdminPassword"];
-        if (!string.IsNullOrWhiteSpace(adminEmail) && !string.IsNullOrWhiteSpace(adminPassword) && !await db.Users.AnyAsync(x => x.Email == adminEmail.ToLower(), ct))
+        if (!string.IsNullOrWhiteSpace(adminEmail) && !string.IsNullOrWhiteSpace(adminPassword))
         {
             var hasher = services.GetRequiredService<IPasswordHasher<AppUser>>();
-            var admin = new AppUser { Email = adminEmail.Trim().ToLowerInvariant(), DisplayName = "Administrator", Role = AppRole.Admin.ToString() };
-            admin.PasswordHash = hasher.HashPassword(admin, adminPassword);
-            db.Users.Add(admin);
-            db.UserProfiles.Add(new UserProfile { UserId = admin.Id, Locale = "es" });
+            var admin = await db.Users.SingleOrDefaultAsync(x => x.Email == adminEmail, ct);
+            if (admin is null)
+            {
+                admin = new AppUser { Email = adminEmail, DisplayName = "Administrator", Role = AppRole.Admin.ToString() };
+                admin.PasswordHash = hasher.HashPassword(admin, adminPassword);
+                db.Users.Add(admin);
+                db.UserProfiles.Add(new UserProfile { UserId = admin.Id, Locale = "es" });
+            }
+            else if (configuration.GetValue("Seed:ResetAdminPassword", false) && services.GetRequiredService<IHostEnvironment>().IsDevelopment())
+            {
+                admin.PasswordHash = hasher.HashPassword(admin, adminPassword);
+                admin.Role = AppRole.Admin.ToString();
+                admin.IsActive = true;
+            }
         }
 
         await db.SaveChangesAsync(ct);
