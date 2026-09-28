@@ -17,3 +17,19 @@ Validated endpoints:
 - Grafana: `http://localhost:3000`
 
 Start the stack with `docker compose -p appcoloreando-dev up -d --build`; add `--profile web` when the Flutter Web build should be served on port 8083.
+
+
+## Local port isolation (trabajo / MarketingIndo)
+
+AppColoreando uses dedicated host ports to avoid collisions with the other local Docker projects:
+
+- Web app: http://127.0.0.1:4210
+- Admin: http://127.0.0.1:4211
+- API: http://127.0.0.1:8086
+- Android emulator API: http://10.0.2.2:8086
+- Visual processor: http://127.0.0.1:8090
+- PostgreSQL: 127.0.0.1:5432
+- RabbitMQ: 127.0.0.1:5672 / management 15672
+- MinIO: 127.0.0.1:9000 / console 9001
+
+Do not reassign AppColoreando to host ports 8080, 4200 or 4208 on the trabajo machine; those ports are used by other projects. The Angular admin keeps node_modules in a Docker named volume so npm installation does not run against the Windows bind-mounted node_modules tree.

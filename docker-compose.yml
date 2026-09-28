@@ -59,14 +59,17 @@ services:
       Seed__Enabled: "true"
       Seed__AdminEmail: ${SEED__ADMINEMAIL:-}
       Seed__AdminPassword: ${SEED__ADMINPASSWORD:-}
+      Seed__ResetAdminPassword: ${SEED__RESETADMINPASSWORD:-false}
       RabbitMQ__Host: rabbitmq
       RabbitMQ__User: ${RABBITMQ_USER:-appcoloreando}
       RabbitMQ__Password: ${RABBITMQ_PASSWORD}
       ContentGeneration__SourceAssetRoot: /content-data/source-assets
       ContentGeneration__PublishedRoot: /content-data/published
-      Cors__AllowedOrigins__0: http://localhost:4200
-      Cors__AllowedOrigins__1: http://localhost:8083
-    ports: ["8080:8080"]
+      Cors__AllowedOrigins__0: http://localhost:4211
+      Cors__AllowedOrigins__1: http://localhost:4210
+      Cors__AllowedOrigins__2: http://127.0.0.1:4211
+      Cors__AllowedOrigins__3: http://127.0.0.1:4210
+    ports: ["127.0.0.1:8086:8080"]
     volumes: [content_data:/content-data]
     depends_on:
       content-init:
@@ -118,9 +121,11 @@ services:
   admin:
     image: node:22-alpine
     working_dir: /app
-    command: sh -c "npm ci && npm start -- --host 0.0.0.0"
-    volumes: [./apps/admin:/app]
-    ports: ["4200:4200"]
+    command: sh -c "npm ci --prefer-offline --no-audit --no-fund && npm start -- --host 0.0.0.0"
+    volumes:
+      - ./apps/admin:/app
+      - admin_node_modules:/app/node_modules
+    ports: ["127.0.0.1:4211:4200"]
     depends_on: [api]
 
   webapp:
@@ -129,7 +134,7 @@ services:
     volumes:
       - ./apps/mobile/build/web:/usr/share/nginx/html:ro
       - ./infrastructure/nginx/appcoloreando-web.conf:/etc/nginx/conf.d/default.conf:ro
-    ports: ["8083:80"]
+    ports: ["127.0.0.1:4210:80"]
     depends_on: [api]
   prometheus:
     image: prom/prometheus:latest
@@ -149,3 +154,4 @@ volumes:
   minio_data:
   grafana_data:
   content_data:
+  admin_node_modules:

@@ -35,6 +35,11 @@ public sealed class GenerationPublicationStoreTests
 
             using var publishedBundle = JsonDocument.Parse(
                 await File.ReadAllTextAsync(result.BundlePath));
+            var segmentation = publishedBundle.RootElement.GetProperty("segmentation");
+            Assert.Equal("v2-edge-watershed", segmentation.GetProperty("engine").GetString());
+            Assert.True(segmentation.GetProperty("paletteIndependent").GetBoolean());
+            Assert.Equal(180, segmentation.GetProperty("spatialRegionCount").GetInt32());
+
             var region = publishedBundle.RootElement.GetProperty("regions")[0];
             Assert.Equal("beak", region.GetProperty("semanticTag").GetString());
             Assert.False(region.GetProperty("labelVisibleAtBase").GetBoolean());
@@ -125,6 +130,14 @@ public sealed class GenerationPublicationStoreTests
         var bundle = new
         {
             schemaVersion = "2.2",
+            segmentation = new
+            {
+                engine = "v2-edge-watershed",
+                targetRegions = 180,
+                spatialRegionCount = 180,
+                paletteColorCount = 1,
+                paletteIndependent = true
+            },
             palette = new[] { new { id = 1, hex = "#FFAA00", name = "Amber" } },
             regions = new[] { new { id = 1, colorId = 1, semanticTag = "subject", semanticRole = "subject", labelVisibleAtBase = true } },
             adjustments = Array.Empty<object>()

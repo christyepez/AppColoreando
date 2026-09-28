@@ -7,7 +7,7 @@ import numpy as np
 
 from app.processor import (
     ProcessorOptions, _cluster_colors, _contour_compactness, _foreground_likelihood, _friendly_color_name, _apply_art_palette, _harmonize_palette, _illustration_preprocess, _is_sliver_region, _label_scale, _merge_similar_clusters, _resolve_art_style,
-    _micro_region_threshold, _spatial_compactness, process_image,
+    _micro_region_threshold, _palette_capacity, _segment_spatial_regions, _spatial_compactness, process_image,
 )
 
 
@@ -96,6 +96,50 @@ def test_near_colors_merge_perceptually() -> None:
     assert len(merged_centers) == 2
     assert merged_labels[0, 0] == merged_labels[0, 1]
     assert merged_labels[0, 2] != merged_labels[0, 0]
+
+
+def test_high_density_palette_caps_reach_150_colors() -> None:
+    base = ProcessorOptions(625, 150, 0.18, 0.78, 0.68, 0.14, 0.14, "Master")
+    assert _palette_capacity(base, "animals") == 150
+    assert _palette_capacity(replace(base, difficulty="Detailed"), "natural") == 120
+    assert _palette_capacity(replace(base, difficulty="Normal"), "natural") == 80
+    assert _palette_capacity(replace(base, difficulty="Kids"), "natural") == 20
+
+
+
+
+def test_v2_spatial_regions_are_independent_from_palette_colors() -> None:
+    image = np.zeros((180, 240, 3), dtype=np.uint8)
+    image[:, :120] = (35, 145, 225)
+    image[:, 120:] = (185, 75, 45)
+    lab = cv2.cvtColor(image, cv2.COLOR_BGR2LAB)
+    centers = np.asarray([
+        np.mean(lab[:, :120].reshape(-1, 3), axis=0),
+        np.mean(lab[:, 120:].reshape(-1, 3), axis=0),
+    ], dtype=np.uint8)
+    options = replace(_options(), target_regions=72, max_colors=2)
+
+    region_labels, region_colors = _segment_spatial_regions(lab, centers, options)
+
+    spatial_count = int(region_labels.max()) + 1
+    assert 50 <= spatial_count <= 72
+    assert len(region_colors) == spatial_count
+    assert set(np.unique(region_colors)).issubset({0, 1})
+    assert spatial_count > len(np.unique(region_colors)) * 10
+
+
+def test_bundle_reports_palette_independent_segmentation(tmp_path: Path) -> None:
+    source = tmp_path / "duck-v2.png"
+    output = tmp_path / "v2"
+    _sample_image(source)
+    process_image(source, output, replace(_options(), target_regions=48))
+    bundle = json.loads((output / "bundle.json").read_text(encoding="utf-8"))
+    segmentation = bundle["segmentation"]
+    assert segmentation["engine"] == "v2-edge-watershed"
+    assert segmentation["paletteIndependent"] is True
+    assert segmentation["targetRegions"] == 48
+    assert segmentation["spatialRegionCount"] >= bundle["qa"]["regionCount"]
+    assert segmentation["spatialRegionCount"] > segmentation["paletteColorCount"]
 
 
 def test_difficulty_controls_micro_region_threshold() -> None:
@@ -307,6 +351,26 @@ def test_auto_art_style_resolves_from_semantic_hints() -> None:
     assert _resolve_art_style("auto", hints) == "animals"
     assert _resolve_art_style("portrait", ()) == "portrait"
     assert _resolve_art_style("unknown", ()) == "natural"
+    assert _resolve_art_style("auto", ({"tag": "andean condor", "role": "subject"},)) == "andino"
+    assert _resolve_art_style("auto", ({"tag": "spaceship galaxy", "role": "subject"},)) == "space-opera"
+    assert _resolve_art_style("comic-pop", ()) == "comic"
+    assert _resolve_art_style("anime-epic", ()) == "anime"
+
+
+def test_vivid_profiles_increase_chroma_without_tinting_neutrals() -> None:
+    palette = ["#A06F58", "#3A7FBF", "#808080"]
+    natural = _apply_art_palette(palette, "natural")
+    andino = _apply_art_palette(palette, "andino")
+    comic = _apply_art_palette(palette, "comic")
+    anime = _apply_art_palette(palette, "anime")
+    assert andino != natural
+    assert comic != natural
+    assert anime != natural
+    assert andino[2] == natural[2]  # neutral grey remains neutral
+    for styled in (andino, comic, anime):
+        blue, green, red = [int(styled[1][i:i+2], 16) for i in (5, 3, 1)]
+        hsv = cv2.cvtColor(np.uint8([[[blue, green, red]]]), cv2.COLOR_BGR2HSV)[0, 0]
+        assert int(hsv[1]) >= 54
 
 
 def test_art_palette_profile_is_deterministic_and_style_specific() -> None:
@@ -366,3 +430,76 @@ def test_auto_repair_only_accepts_improvement(tmp_path: Path) -> None:
     info = result["autoRepair"]
     assert info["finalScore"] >= info["baselineScore"]
     assert (output / "manifest.json").exists()
+
+def _themed_acceptance_image(path: Path, seed: int) -> None:
+    height = width = 360
+    y, x = np.mgrid[0:height, 0:width]
+    image = np.zeros((height, width, 3), dtype=np.uint8)
+    image[..., 0] = ((x * (3 + seed) + y * 2) % 220 + 20).astype(np.uint8)
+    image[..., 1] = ((y * (4 + seed) + x) % 210 + 25).astype(np.uint8)
+    image[..., 2] = (((x + y) * (2 + seed)) % 215 + 25).astype(np.uint8)
+
+    for i in range(12):
+        cx = 28 + ((i * 71 + seed * 19) % 304)
+        cy = 28 + ((i * 47 + seed * 31) % 304)
+        radius = 12 + ((i * 7 + seed * 3) % 34)
+        color = (
+            int((35 + i * 29 + seed * 17) % 235),
+            int((65 + i * 41 + seed * 13) % 235),
+            int((95 + i * 53 + seed * 11) % 235),
+        )
+        cv2.circle(image, (cx, cy), radius, color, -1)
+
+    for i in range(7):
+        x0 = 10 + ((i * 43 + seed * 23) % 270)
+        y0 = 18 + ((i * 61 + seed * 17) % 270)
+        cv2.rectangle(
+            image,
+            (x0, y0),
+            (min(width - 1, x0 + 42 + i * 3), min(height - 1, y0 + 24 + i * 5)),
+            ((180 + i * 9) % 255, (45 + i * 31) % 255, (85 + i * 27) % 255),
+            -1,
+        )
+
+    assert cv2.imwrite(str(path), image)
+
+
+def test_themed_v2_acceptance_bundles(tmp_path: Path) -> None:
+    profiles = [
+        ("andino", "andino-vivo", 1),
+        ("space-opera", "space-opera", 2),
+        ("comic", "comic-pop", 3),
+        ("anime", "anime-epic", 4),
+    ]
+    for art_style, style_code, seed in profiles:
+        source = tmp_path / f"{art_style}.png"
+        output = tmp_path / f"out-{art_style}"
+        _themed_acceptance_image(source, seed)
+        options = ProcessorOptions(
+            target_regions=240,
+            max_colors=64,
+            simplification_tolerance=0.22,
+            edge_sensitivity=0.72,
+            curve_smoothness=0.72,
+            saturation_boost=0.16,
+            contrast_boost=0.12,
+            difficulty="Detailed",
+            style_code=style_code,
+            art_style=art_style,
+        )
+        result = process_image(source, output, options)
+        bundle = json.loads((output / "bundle.json").read_text(encoding="utf-8"))
+        qa = bundle["qa"]
+        segmentation = bundle["segmentation"]
+
+        assert bundle["artStyle"] == art_style
+        assert segmentation["engine"] == "v2-edge-watershed"
+        assert segmentation["paletteIndependent"] is True
+        assert segmentation["targetRegions"] == 240
+        assert segmentation["spatialRegionCount"] >= 180
+        assert 8 <= result["colorCount"] <= 64
+        assert qa["playableCoverage"] >= 0.95
+        assert qa["score"] >= 70
+        assert not any(issue["severity"] == "Error" for issue in qa["issues"])
+        assert (output / "artwork.svg").stat().st_size > 1000
+        assert (output / "catalog-preview.webp").stat().st_size > 1000

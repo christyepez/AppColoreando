@@ -228,3 +228,13 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Final gates: backend Release 0 warnings/errors, Flutter 22/22, visual processor 25/25, admin build/audit clean.
 - Final Web Release and Android AAB regenerated; AAB is 49.9 MB.
 - Production merge/tag/deployment/store submission intentionally remain unexecuted pending explicit approval.
+
+
+## S51 — Local Production Preflight — Complete
+- Added `tools/verify-local-stack.ps1` as a repeatable local production gate.
+- Preflight validates Docker Compose syntax, isolated AppColoreando ports, API/Web/Admin/Visual Processor health, required themed catalog seeds and S42 engine identity.
+- Release-readiness endpoints were corrected to the isolated local ports: API 8086, Web 4210, Admin 4211 and Visual Processor 8090.
+- Added a processor acceptance gate that generates complete S42 bundles for Andean, Space Opera, Comic and Anime profiles using palette-independent spatial segmentation.
+- The themed acceptance gate validates target-region metadata, spatial-region density, palette bounds, playable coverage, QA score, absence of Error-severity issues and generated SVG/WebP artifacts.
+- Validation on trabajo: Docker/HTTP preflight PASS; .NET Release build 0 warnings/0 errors; backend 38/38 tests PASS; Flutter analyze PASS; Visual Processor 30/30 tests PASS.
+- Cross-device mobile validation on MarketingIndo: Flutter analyze PASS; Flutter 26/26 tests PASS.

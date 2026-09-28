@@ -50,6 +50,15 @@ class CatalogArtwork {
         regionCount: (json['regionCount'] as num?)?.toInt() ?? 0,
         thumbnailUrl: json['thumbnailUrl']?.toString(),
       );
+
+  String? resolveThumbnailUrl(String apiRoot) {
+    final value = thumbnailUrl;
+    if (value == null || value.isEmpty) return null;
+    final candidate = Uri.parse(value);
+    if (candidate.hasScheme) return candidate.toString();
+    final root = apiRoot.endsWith('/') ? apiRoot : '$apiRoot/';
+    return Uri.parse(root).resolve(value).toString();
+  }
 }
 
 class DailyContent {

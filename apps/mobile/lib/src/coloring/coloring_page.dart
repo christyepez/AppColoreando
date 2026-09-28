@@ -31,7 +31,14 @@ class _ColoringPageState extends ConsumerState<ColoringPage> {
   @override
   void initState() {
     super.initState();
+    _transformController.addListener(_handleTransformChanged);
     _load();
+  }
+
+  void _handleTransformChanged() {
+    final scale = _transformController.value.getMaxScaleOnAxis().clamp(1.0, 7.0);
+    if ((scale - _zoomScale).abs() < 0.05 || !mounted) return;
+    setState(() => _zoomScale = scale);
   }
 
   Future<void> _load() async {
@@ -54,13 +61,13 @@ class _ColoringPageState extends ConsumerState<ColoringPage> {
 
   void _scheduleSave() {
     _saveDebounce?.cancel();
-    _transformController.dispose();
     _saveDebounce = Timer(const Duration(milliseconds: 350), _save);
   }
 
   @override
   void dispose() {
     _saveDebounce?.cancel();
+    _transformController.removeListener(_handleTransformChanged);
     _transformController.dispose();
     super.dispose();
   }
@@ -72,7 +79,13 @@ class _ColoringPageState extends ConsumerState<ColoringPage> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final progress = artwork.regions.isEmpty ? 0.0 : completed.length / artwork.regions.length;
-    final remainingForColor = artwork.regions.where((r) => r.colorId == selectedColorId && !completed.contains(r.id)).length;
+    final remainingByColor = <int, int>{};
+    for (final region in artwork.regions) {
+      if (!completed.contains(region.id)) {
+        remainingByColor.update(region.colorId, (value) => value + 1, ifAbsent: () => 1);
+      }
+    }
+    final remainingForColor = remainingByColor[selectedColorId] ?? 0;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF4F2EE),
@@ -134,12 +147,6 @@ IconButton(tooltip: 'Deshacer', icon: const Icon(Icons.undo_rounded), onPressed:
                       minScale: 1,
                       maxScale: 7,
                       boundaryMargin: const EdgeInsets.all(60),
-                      onInteractionUpdate: (_) {
-                        final scale = _transformController.value.getMaxScaleOnAxis();
-                        if ((scale - _zoomScale).abs() > 0.01) {
-                          setState(() => _zoomScale = scale);
-                        }
-                      },
                       child: LayoutBuilder(builder: (context, constraints) => GestureDetector(
                         behavior: HitTestBehavior.opaque,
                         onTapUp: (details) => _tap(details.localPosition, Size(constraints.maxWidth, constraints.maxHeight), artwork),
@@ -173,7 +180,7 @@ IconButton(tooltip: 'Deshacer', icon: const Icon(Icons.undo_rounded), onPressed:
             separatorBuilder: (_, __) => const SizedBox(width: 10),
             itemBuilder: (context, index) {
               final entry = artwork.palette[index];
-              final remaining = artwork.regions.where((r) => r.colorId == entry.id && !completed.contains(r.id)).length;
+              final remaining = remainingByColor[entry.id] ?? 0;
               final selected = selectedColorId == entry.id;
               final finished = remaining == 0;
               return GestureDetector(

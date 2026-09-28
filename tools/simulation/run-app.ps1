@@ -1,7 +1,7 @@
 param(
   [ValidateSet('web','windows','android')]
   [string]$Target = 'web',
-  [string]$ApiBaseUrl = 'http://localhost:8080',
+  [string]$ApiBaseUrl = 'http://localhost:8086',
   [string]$AndroidAvd = 'appcoloreando_api35'
 )
 
@@ -43,6 +43,6 @@ switch ($Target) {
     if (-not $serial) { throw 'Android emulator did not become ready.' }
     $sdkLevel = (& $adb -s $serial shell getprop ro.build.version.sdk).Trim()
     Write-Host "Using $serial (Android API $sdkLevel)"
-    flutter run -d $serial --dart-define='API_BASE_URL=http://10.0.2.2:8080'
+    flutter run -d $serial --dart-define='API_BASE_URL=http://10.0.2.2:8086'
   }
 }

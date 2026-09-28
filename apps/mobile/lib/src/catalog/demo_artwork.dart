@@ -10,6 +10,102 @@ final demoArtworks = [
   DemoArtwork.generate('south-mosaic', 'Atardecer tropical', 'SA', 4, 'Paisajes', 2),
   DemoArtwork.generate('prairie-quilt', 'Jardin de verano', 'US', 2, 'Flores', 3),
   DemoArtwork.generate('ocean-dream', 'Sueno del oceano', 'EC', 3, 'Animales', 4),
+
+  // Andes - original AppColoreando scenes.
+  DemoArtwork.generate('cotopaxi-sunrise', 'Amanecer en el Cotopaxi', 'EC', 4, 'Paisajes Andinos', 6),
+  DemoArtwork.generate('quilotoa-lagoon', 'Laguna esmeralda andina', 'EC', 4, 'Paisajes Andinos', 7),
+  DemoArtwork.generate('paramo-trail', 'Sendero de paramo', 'EC', 3, 'Paisajes Andinos', 8),
+  DemoArtwork.generate('andean-condor', 'Condor de los Andes', 'EC', 4, 'Fauna Andina', 9),
+  DemoArtwork.generate('llama-valley', 'Llamas del valle', 'SA', 3, 'Fauna Andina', 10),
+  DemoArtwork.generate('andean-market', 'Mercado andino', 'EC', 5, 'Cultura Andina', 11),
+  DemoArtwork.generate('andean-textiles', 'Textiles de los Andes', 'SA', 4, 'Cultura Andina', 12),
+  DemoArtwork.generate('snowy-andes', 'Cumbres nevadas', 'SA', 5, 'Paisajes Andinos', 13),
+
+  // Original space-opera collection (genre inspired, no franchise assets).
+  DemoArtwork.generate('double-sun-world', 'Planeta de dos soles', 'SA', 4, 'Space Opera', 14),
+  DemoArtwork.generate('stellar-fighter', 'Caza estelar', 'SA', 5, 'Naves Galacticas', 15),
+  DemoArtwork.generate('orbital-city', 'Ciudad orbital', 'SA', 5, 'Mundos Galacticos', 16),
+  DemoArtwork.generate('explorer-droid', 'Droide explorador', 'SA', 3, 'Space Opera', 17),
+  DemoArtwork.generate('nebula-cruiser', 'Crucero de la nebulosa', 'SA', 5, 'Naves Galacticas', 18),
+  DemoArtwork.generate('ringed-world', 'Mundo de anillos', 'SA', 4, 'Mundos Galacticos', 19),
+  DemoArtwork.generate('energy-duel', 'Duelo de energia', 'SA', 5, 'Space Opera', 20),
+  DemoArtwork.generate('galactic-temple', 'Templo galactico', 'SA', 5, 'Mundos Galacticos', 21),
+
+  // Original comic collection.
+  DemoArtwork.generate('urban-hero', 'Heroe urbano', 'SA', 4, 'Heroes Comic', 22),
+  DemoArtwork.generate('tech-villain', 'Villano tecnologico', 'SA', 5, 'Villanos Comic', 23),
+  DemoArtwork.generate('comic-rooftop', 'Batalla en la azotea', 'SA', 5, 'Accion Comic', 24),
+  DemoArtwork.generate('neon-comic-city', 'Ciudad comic neon', 'SA', 4, 'Ciudad Comic', 25),
+  DemoArtwork.generate('noir-detective', 'Detective noir', 'SA', 4, 'Comic Noir', 26),
+  DemoArtwork.generate('retro-heroine', 'Heroina retro', 'SA', 4, 'Heroes Comic', 27),
+  DemoArtwork.generate('giant-guardian', 'Guardian mecanico', 'SA', 5, 'Accion Comic', 28),
+  DemoArtwork.generate('pulp-adventure', 'Aventura pulp', 'SA', 3, 'Accion Comic', 29),
+
+  // Original anime collection.
+  DemoArtwork.generate('anime-adventurer', 'Aventurera del cielo', 'SA', 4, 'Aventura Anime', 30),
+  DemoArtwork.generate('anime-swordsman', 'Espadachin del viento', 'SA', 5, 'Aventura Anime', 31),
+  DemoArtwork.generate('anime-dragon', 'Dragon de cristal', 'SA', 5, 'Fantasia Anime', 32),
+  DemoArtwork.generate('anime-magic-girl', 'Guardiana estelar', 'SA', 4, 'Fantasia Anime', 33),
+  DemoArtwork.generate('anime-mecha', 'Mecha guardian', 'SA', 5, 'Mecha Anime', 34),
+  DemoArtwork.generate('anime-chibi-team', 'Equipo chibi', 'SA', 2, 'Chibi', 35),
+  DemoArtwork.generate('anime-city', 'Ciudad anime futurista', 'SA', 4, 'Aventura Anime', 36),
+  DemoArtwork.generate('anime-portrait', 'Retrato anime', 'SA', 3, 'Retratos Anime', 37),
+
+  // Complete initial Andean pack: 20 base artworks.
+  DemoArtwork.generate('andean-waterfall', 'Cascada de altura', 'EC', 4, 'Paisajes Andinos', 38),
+  DemoArtwork.generate('andes-valley', 'Valle interandino', 'EC', 3, 'Paisajes Andinos', 39),
+  DemoArtwork.generate('andean-village', 'Pueblo de la sierra', 'EC', 4, 'Cultura Andina', 40),
+  DemoArtwork.generate('adobe-house', 'Casa de adobe y montanas', 'EC', 3, 'Cultura Andina', 41),
+  DemoArtwork.generate('andean-musician', 'Musico de los Andes', 'SA', 4, 'Cultura Andina', 42),
+  DemoArtwork.generate('andean-hummingbird', 'Colibri andino', 'EC', 3, 'Fauna Andina', 43),
+  DemoArtwork.generate('andean-fox', 'Zorro de montana', 'SA', 4, 'Fauna Andina', 44),
+  DemoArtwork.generate('alpaca-meadow', 'Alpaca en la pradera', 'SA', 3, 'Fauna Andina', 45),
+  DemoArtwork.generate('andean-lake-reflection', 'Reflejo en el lago andino', 'EC', 5, 'Paisajes Andinos', 46),
+  DemoArtwork.generate('andean-woman', 'Vestimenta andina', 'EC', 5, 'Cultura Andina', 47),
+  DemoArtwork.generate('andean-flower-field', 'Flores del paramo', 'EC', 4, 'Paisajes Andinos', 48),
+  DemoArtwork.generate('llama-mountain-group', 'Llamas y montanas', 'SA', 4, 'Fauna Andina', 49),
+
+  // Complete initial Space Opera pack: 20 base artworks.
+  DemoArtwork.generate('desert-starship', 'Nave sobre el desierto', 'SA', 5, 'Naves Galacticas', 50),
+  DemoArtwork.generate('galactic-warrior', 'Guerrero galactico original', 'SA', 5, 'Space Opera', 51),
+  DemoArtwork.generate('night-future-city', 'Ciudad futurista nocturna', 'SA', 5, 'Mundos Galacticos', 52),
+  DemoArtwork.generate('stellar-battle', 'Batalla estelar', 'SA', 5, 'Space Opera', 53),
+  DemoArtwork.generate('space-station', 'Estacion espacial', 'SA', 5, 'Mundos Galacticos', 54),
+  DemoArtwork.generate('galactic-pilot', 'Piloto de las estrellas', 'SA', 4, 'Space Opera', 55),
+  DemoArtwork.generate('starship-hangar', 'Hangar de naves', 'SA', 5, 'Naves Galacticas', 56),
+  DemoArtwork.generate('friendly-alien', 'Criatura de otro mundo', 'SA', 3, 'Mundos Galacticos', 57),
+  DemoArtwork.generate('moon-ruins', 'Ruinas en la luna', 'SA', 5, 'Mundos Galacticos', 58),
+  DemoArtwork.generate('stellar-squadron', 'Escuadron estelar', 'SA', 5, 'Naves Galacticas', 59),
+  DemoArtwork.generate('future-control-room', 'Centro de control futurista', 'SA', 4, 'Space Opera', 60),
+  DemoArtwork.generate('rocky-planet-fleet', 'Flota sobre planeta rocoso', 'SA', 5, 'Mundos Galacticos', 61),
+
+  // Complete initial Comic pack: 20 base artworks.
+  DemoArtwork.generate('flying-comic-hero', 'Heroe en vuelo', 'SA', 4, 'Heroes Comic', 62),
+  DemoArtwork.generate('comic-heroine-cape', 'Heroina de la capa roja', 'SA', 4, 'Heroes Comic', 63),
+  DemoArtwork.generate('future-motorcyclist', 'Motociclista futurista', 'SA', 4, 'Accion Comic', 64),
+  DemoArtwork.generate('secret-lab', 'Laboratorio secreto', 'SA', 5, 'Comic Noir', 65),
+  DemoArtwork.generate('comic-team-cover', 'Equipo de heroes', 'SA', 5, 'Heroes Comic', 66),
+  DemoArtwork.generate('comic-street-chase', 'Persecucion urbana', 'SA', 5, 'Accion Comic', 67),
+  DemoArtwork.generate('comic-mad-scientist', 'Cientifico excentrico', 'SA', 4, 'Villanos Comic', 68),
+  DemoArtwork.generate('comic-explosion', 'Explosion pop', 'SA', 3, 'Accion Comic', 69),
+  DemoArtwork.generate('hero-villain-duel', 'Heroe contra villano', 'SA', 5, 'Accion Comic', 70),
+  DemoArtwork.generate('future-warrior-comic', 'Guerrera futurista', 'SA', 4, 'Heroes Comic', 71),
+  DemoArtwork.generate('retro-comic-cover', 'Portada comic retro', 'SA', 4, 'Heroes Comic', 72),
+  DemoArtwork.generate('comic-mecha-protector', 'Protector mecanico', 'SA', 5, 'Accion Comic', 73),
+
+  // Complete initial Anime pack: 20 base artworks.
+  DemoArtwork.generate('anime-friends', 'Amigos de aventura', 'SA', 4, 'Aventura Anime', 74),
+  DemoArtwork.generate('anime-spirit-creature', 'Criatura espiritual', 'SA', 4, 'Fantasia Anime', 75),
+  DemoArtwork.generate('anime-school-day', 'Dia de escuela', 'SA', 3, 'Aventura Anime', 76),
+  DemoArtwork.generate('anime-future-warrior', 'Guerrera del futuro', 'SA', 5, 'Aventura Anime', 77),
+  DemoArtwork.generate('anime-magic-forest', 'Bosque encantado', 'SA', 4, 'Fantasia Anime', 78),
+  DemoArtwork.generate('anime-adventure-pair', 'Dupla de aventura', 'SA', 4, 'Aventura Anime', 79),
+  DemoArtwork.generate('anime-pet-friend', 'Heroe y mascota', 'SA', 3, 'Retratos Anime', 80),
+  DemoArtwork.generate('anime-energy-battle', 'Batalla de energia', 'SA', 5, 'Aventura Anime', 81),
+  DemoArtwork.generate('anime-samurai', 'Samurai del amanecer', 'SA', 5, 'Aventura Anime', 82),
+  DemoArtwork.generate('anime-urban-mecha', 'Mecha urbano', 'SA', 5, 'Mecha Anime', 83),
+  DemoArtwork.generate('anime-temple', 'Templo de la montana', 'SA', 4, 'Fantasia Anime', 84),
+  DemoArtwork.generate('anime-hero-team', 'Equipo de heroes anime', 'SA', 5, 'Aventura Anime', 85),
 ];
 
 DemoArtwork demoArtworkById(String id) => demoArtworks.firstWhere((x) => x.id == id, orElse: () => demoArtworks.first);
@@ -70,16 +166,32 @@ class DemoArtwork {
 
   static DemoArtwork generate(String id, String title, String countryCode, int difficulty, String category, int variant) {
     final palettes = <List<Color>>[
-      [const Color(0xFF205C4C), const Color(0xFFF0A35E), const Color(0xFFE85D75), const Color(0xFFF6D96B), const Color(0xFF79B9A5), const Color(0xFFEBE3D6)],
-      [const Color(0xFF4A2B24), const Color(0xFF9E5C3A), const Color(0xFFD99A5C), const Color(0xFFF2D0A4), const Color(0xFF607B63), const Color(0xFFECE2D3)],
-      [const Color(0xFF152A47), const Color(0xFFEA6F64), const Color(0xFFF3A453), const Color(0xFFF2D36D), const Color(0xFF4DA6A8), const Color(0xFFEDE8DF)],
-      [const Color(0xFF3A6548), const Color(0xFFE96E83), const Color(0xFFF3A05E), const Color(0xFFF2D55D), const Color(0xFF86B7A0), const Color(0xFFEDE5DA)],
-      [const Color(0xFF17435D), const Color(0xFF2D80AA), const Color(0xFF56B5B1), const Color(0xFFF0C54E), const Color(0xFFF47E55), const Color(0xFFE9E5DD)],
-      [const Color(0xFF1C1F35), const Color(0xFF4E5289), const Color(0xFF7D6CAA), const Color(0xFFE3A5B7), const Color(0xFFF0D2A5), const Color(0xFFE9E6DF)],
+      [const Color(0xFF145A32), const Color(0xFFFF8C1A), const Color(0xFFE63961), const Color(0xFFFFD23F), const Color(0xFF21A179), const Color(0xFFF2E8D5)],
+      [const Color(0xFF4B2417), const Color(0xFFB85C24), const Color(0xFFF19C3D), const Color(0xFFFFD08A), const Color(0xFF487A4B), const Color(0xFFE9D5B4)],
+      [const Color(0xFF0A2F5A), const Color(0xFFF0454F), const Color(0xFFFF8A24), const Color(0xFFFFD43B), const Color(0xFF10A7A5), const Color(0xFFF2E6D0)],
+      [const Color(0xFF216837), const Color(0xFFF0386B), const Color(0xFFFF7A21), const Color(0xFFFFD42A), const Color(0xFF5CAF78), const Color(0xFFF3E2C7)],
+      [const Color(0xFF083D77), const Color(0xFF0077B6), const Color(0xFF00B4D8), const Color(0xFFFFC300), const Color(0xFFFF5A36), const Color(0xFFF4EDE0)],
+      [const Color(0xFF131629), const Color(0xFF403D8F), const Color(0xFF7B2CBF), const Color(0xFFE63E8C), const Color(0xFFFFC857), const Color(0xFFF5EEE4)],
+
+      // Andean vivid.
+      [const Color(0xFF125C2E), const Color(0xFF00A6A6), const Color(0xFF1976D2), const Color(0xFFFFC107), const Color(0xFFE63946), const Color(0xFF8D5524), const Color(0xFFF4E2C6)],
+      [const Color(0xFF0B6E4F), const Color(0xFF17A398), const Color(0xFF1261A0), const Color(0xFFFFB000), const Color(0xFFF24C3D), const Color(0xFF6B3E26), const Color(0xFFF2D7B6)],
+
+      // Galactic / space opera.
+      [const Color(0xFF050816), const Color(0xFF132A63), const Color(0xFF4D2DB7), const Color(0xFF00D4FF), const Color(0xFFFF2E88), const Color(0xFFFFB000), const Color(0xFFE8F7FF)],
+      [const Color(0xFF070A18), const Color(0xFF243B80), const Color(0xFF7A1CAC), const Color(0xFF00E0FF), const Color(0xFFFF3B30), const Color(0xFFFFC857), const Color(0xFFDCEBFF)],
+
+      // Comic.
+      [const Color(0xFF101820), const Color(0xFF0057B8), const Color(0xFFE31B23), const Color(0xFFFFC72C), const Color(0xFF00A651), const Color(0xFFF58220), const Color(0xFFF7F7F7)],
+      [const Color(0xFF171717), const Color(0xFF0066FF), const Color(0xFFFF1744), const Color(0xFFFFD600), const Color(0xFF00C853), const Color(0xFFAA00FF), const Color(0xFFF5F5F5)],
+
+      // Anime / mecha.
+      [const Color(0xFF13293D), const Color(0xFF1B98E0), const Color(0xFFFF4D8D), const Color(0xFFFFC145), const Color(0xFF53D769), const Color(0xFF8E44AD), const Color(0xFFFFE0C2)],
+      [const Color(0xFF121826), const Color(0xFF00A8E8), const Color(0xFFFF2D55), const Color(0xFFFFCC00), const Color(0xFF30D158), const Color(0xFF5E5CE6), const Color(0xFFFAD7B5)],
     ];
     final colors = palettes[variant % palettes.length];
     final palette = [for (var i = 0; i < colors.length; i++) DemoColor(i + 1, colors[i])];
-    final regions = _radialRegions(variant, palette.length, difficulty);
+    final regions = _themedRegions(category, variant, palette.length, difficulty);
     final labels = ['Tesoro', 'Revela', 'Postal Viva', 'Lumina', 'Eclipse', 'Aura'];
     return DemoArtwork(id: id, title: title, countryCode: countryCode, difficulty: difficulty, category: category, palette: palette, regions: regions, variant: variant, effectLabel: labels[variant % labels.length], previewColored: variant.isEven);
   }
@@ -115,6 +227,164 @@ class DemoArtwork {
     }
     return regions;
   }
+}
+
+
+List<DemoRegion> _themedRegions(String category, int variant, int colorCount, int difficulty) {
+  final normalized = category.toLowerCase();
+  if (normalized.contains('andino') || normalized.contains('andina')) {
+    return _andeanSceneRegions(variant, colorCount);
+  }
+  if (normalized.contains('space') || normalized.contains('galact') || normalized.contains('naves')) {
+    return _spaceSceneRegions(variant, colorCount);
+  }
+  if (normalized.contains('comic')) {
+    return _comicSceneRegions(variant, colorCount);
+  }
+  if (normalized.contains('anime') || normalized.contains('chibi') || normalized.contains('mecha')) {
+    return _animeSceneRegions(variant, colorCount, normalized.contains('mecha'));
+  }
+  return DemoArtwork._radialRegions(variant, colorCount, difficulty);
+}
+
+DemoRegion _poly(int id, int colorId, List<Offset> points, {bool smooth = true}) =>
+    DemoRegion(id: id, colorId: colorId, points: points, smooth: smooth);
+
+DemoRegion _ellipse(int id, int colorId, Offset center, double rx, double ry) {
+  final bounds = [
+    Offset(center.dx - rx, center.dy - ry),
+    Offset(center.dx + rx, center.dy - ry),
+    Offset(center.dx + rx, center.dy + ry),
+    Offset(center.dx - rx, center.dy + ry),
+  ];
+  return DemoRegion(
+    id: id,
+    colorId: colorId,
+    points: bounds,
+    pathBuilder: (size) => Path()
+      ..addOval(Rect.fromCenter(
+        center: Offset(center.dx * size.width, center.dy * size.height),
+        width: rx * 2 * size.width,
+        height: ry * 2 * size.height,
+      )),
+  );
+}
+
+List<DemoRegion> _andeanSceneRegions(int variant, int colorCount) {
+  var id = 1;
+  int c(int offset) => ((variant + offset) % colorCount) + 1;
+  final shift = ((variant % 5) - 2) * .012;
+  final regions = <DemoRegion>[
+    _poly(id++, c(0), const [Offset(0,0), Offset(1,0), Offset(1,.48), Offset(0,.48)], smooth:false),
+    _ellipse(id++, c(3), Offset(.78 + shift, .17), .075, .075),
+    _poly(id++, c(4), [Offset(0,.50), Offset(.18,.30), Offset(.34,.50), Offset(.50,.23 + shift), Offset(.68,.50), Offset(.82,.35), const Offset(1,.51)], smooth:false),
+    _poly(id++, c(2), [Offset(0,.56), Offset(.16,.43), Offset(.29,.57), Offset(.47,.38), Offset(.63,.57), Offset(.83,.45), const Offset(1,.57)], smooth:true),
+    _poly(id++, c(5), const [Offset(0,.58), Offset(1,.58), Offset(1,.77), Offset(0,.77)], smooth:true),
+    _poly(id++, c(1), const [Offset(0,.74), Offset(1,.74), Offset(1,1), Offset(0,1)], smooth:true),
+  ];
+  for (var i = 0; i < 7; i++) {
+    final x = .08 + i * .145 + shift * .3;
+    regions.add(_poly(id++, c(i + 1), [
+      Offset(x, .79),
+      Offset(x + .035, .69 - (i % 2) * .025),
+      Offset(x + .07, .79),
+      Offset(x + .055, .96),
+      Offset(x + .015, .96),
+    ]));
+  }
+  regions.add(_poly(id++, c(2), const [Offset(.38,.48), Offset(.50,.25), Offset(.62,.48), Offset(.57,.48), Offset(.50,.34), Offset(.44,.48)], smooth:false));
+  regions.add(_ellipse(id++, c(4), const Offset(.24,.83), .035, .022));
+  regions.add(_ellipse(id++, c(3), const Offset(.31,.85), .042, .025));
+  regions.add(_ellipse(id++, c(2), const Offset(.72,.84), .038, .024));
+  regions.add(_ellipse(id++, c(5), const Offset(.79,.82), .044, .026));
+  return regions;
+}
+
+List<DemoRegion> _spaceSceneRegions(int variant, int colorCount) {
+  var id = 1;
+  int c(int offset) => ((variant + offset) % colorCount) + 1;
+  final shift = ((variant % 7) - 3) * .01;
+  final regions = <DemoRegion>[
+    _poly(id++, c(0), const [Offset(0,0), Offset(1,0), Offset(1,1), Offset(0,1)], smooth:false),
+    _ellipse(id++, c(3), Offset(.78 + shift, .22), .16, .16),
+    _ellipse(id++, c(4), Offset(.18 - shift, .18), .045, .045),
+    _poly(id++, c(2), [
+      Offset(.18 + shift,.58), Offset(.50 + shift,.43), Offset(.82 + shift,.58),
+      Offset(.58 + shift,.62), Offset(.52 + shift,.70), Offset(.46 + shift,.62),
+    ], smooth:false),
+    _poly(id++, c(5), [
+      Offset(.31 + shift,.57), Offset(.50 + shift,.49), Offset(.69 + shift,.57),
+      Offset(.57 + shift,.59), Offset(.50 + shift,.64), Offset(.43 + shift,.59),
+    ], smooth:false),
+    _poly(id++, c(1), const [Offset(0,.80), Offset(.20,.73), Offset(.42,.80), Offset(.63,.75), Offset(.83,.82), Offset(1,.77), Offset(1,1), Offset(0,1)], smooth:true),
+  ];
+  for (var i = 0; i < 12; i++) {
+    final x = ((i * 37 + variant * 11) % 92) / 100 + .04;
+    final y = ((i * 53 + variant * 7) % 62) / 100 + .04;
+    regions.add(_ellipse(id++, c(i + 1), Offset(x, y), .007 + (i % 3) * .003, .007 + (i % 2) * .002));
+  }
+  regions.add(_poly(id++, c(3), const [Offset(.49,.70), Offset(.46,.88), Offset(.50,.82), Offset(.54,.88), Offset(.51,.70)], smooth:false));
+  return regions;
+}
+
+List<DemoRegion> _comicSceneRegions(int variant, int colorCount) {
+  var id = 1;
+  int c(int offset) => ((variant + offset) % colorCount) + 1;
+  final regions = <DemoRegion>[
+    _poly(id++, c(6), const [Offset(0,0), Offset(1,0), Offset(1,1), Offset(0,1)], smooth:false),
+    _poly(id++, c(3), const [Offset(.04,.10), Offset(.32,.10), Offset(.32,.74), Offset(.04,.74)], smooth:false),
+    _poly(id++, c(1), const [Offset(.35,.20), Offset(.57,.20), Offset(.57,.78), Offset(.35,.78)], smooth:false),
+    _poly(id++, c(4), const [Offset(.60,.08), Offset(.96,.08), Offset(.96,.76), Offset(.60,.76)], smooth:false),
+    _ellipse(id++, c(2), const Offset(.50,.34), .10, .11),
+    _poly(id++, c(0), const [Offset(.40,.44), Offset(.60,.44), Offset(.68,.77), Offset(.33,.77)], smooth:true),
+    _poly(id++, c(2), const [Offset(.39,.48), Offset(.28,.61), Offset(.35,.64), Offset(.45,.53)], smooth:false),
+    _poly(id++, c(2), const [Offset(.61,.48), Offset(.74,.57), Offset(.68,.64), Offset(.55,.54)], smooth:false),
+    _poly(id++, c(5), const [Offset(.43,.76), Offset(.48,.76), Offset(.45,.96), Offset(.37,.96)], smooth:false),
+    _poly(id++, c(5), const [Offset(.53,.76), Offset(.58,.76), Offset(.65,.96), Offset(.57,.96)], smooth:false),
+  ];
+  for (var i = 0; i < 8; i++) {
+    final a = i * math.pi / 4 + variant * .09;
+    final inner = .18;
+    final outer = .31 + (i % 2) * .03;
+    regions.add(_poly(id++, c(i + 1), [
+      const Offset(.50,.43),
+      Offset(.50 + math.cos(a - .10) * inner, .43 + math.sin(a - .10) * inner),
+      Offset(.50 + math.cos(a) * outer, .43 + math.sin(a) * outer),
+      Offset(.50 + math.cos(a + .10) * inner, .43 + math.sin(a + .10) * inner),
+    ], smooth:false));
+  }
+  return regions;
+}
+
+List<DemoRegion> _animeSceneRegions(int variant, int colorCount, bool mecha) {
+  var id = 1;
+  int c(int offset) => ((variant + offset) % colorCount) + 1;
+  final regions = <DemoRegion>[
+    _poly(id++, c(1), const [Offset(0,0), Offset(1,0), Offset(1,1), Offset(0,1)], smooth:false),
+    _ellipse(id++, c(6), const Offset(.50,.42), .19, .23),
+    _poly(id++, c(5), const [Offset(.30,.39), Offset(.34,.20), Offset(.45,.13), Offset(.50,.20), Offset(.57,.12), Offset(.70,.28), Offset(.68,.46), Offset(.61,.28), Offset(.53,.33), Offset(.44,.26), Offset(.37,.44)], smooth:true),
+    _ellipse(id++, c(0), const Offset(.43,.42), .035, .022),
+    _ellipse(id++, c(0), const Offset(.57,.42), .035, .022),
+    _ellipse(id++, c(2), const Offset(.43,.42), .012, .016),
+    _ellipse(id++, c(2), const Offset(.57,.42), .012, .016),
+    _poly(id++, c(3), const [Offset(.47,.52), Offset(.50,.535), Offset(.53,.52), Offset(.50,.55)], smooth:true),
+    _poly(id++, c(4), const [Offset(.36,.62), Offset(.64,.62), Offset(.78,.96), Offset(.22,.96)], smooth:true),
+  ];
+  if (mecha) {
+    regions.addAll([
+      _poly(id++, c(0), const [Offset(.25,.24), Offset(.36,.18), Offset(.38,.57), Offset(.28,.70), Offset(.20,.54)], smooth:false),
+      _poly(id++, c(2), const [Offset(.75,.24), Offset(.64,.18), Offset(.62,.57), Offset(.72,.70), Offset(.80,.54)], smooth:false),
+      _poly(id++, c(3), const [Offset(.39,.60), Offset(.61,.60), Offset(.66,.84), Offset(.34,.84)], smooth:false),
+    ]);
+  } else {
+    regions.add(_poly(id++, c(2), const [Offset(.33,.28), Offset(.24,.18), Offset(.32,.15), Offset(.41,.23)], smooth:true));
+    regions.add(_poly(id++, c(4), const [Offset(.67,.28), Offset(.76,.18), Offset(.68,.15), Offset(.59,.23)], smooth:true));
+  }
+  for (var i = 0; i < 6; i++) {
+    final x = .10 + i * .16;
+    regions.add(_ellipse(id++, c(i + 1), Offset(x, .12 + (i % 2) * .05), .015, .015));
+  }
+  return regions;
 }
 
 class DemoColor {

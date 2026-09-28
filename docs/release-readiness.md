@@ -2,12 +2,12 @@
 
 ## Local service endpoints
 
-- API: `http://localhost:8080`
-- Swagger: `http://localhost:8080/swagger`
-- Health: `http://localhost:8080/health`
-- Prometheus metrics: `http://localhost:8080/metrics`
-- Admin: `http://localhost:4200`
-- User Web/PWA: `http://localhost:8083`
+- API: `http://127.0.0.1:8086`
+- Swagger: `http://127.0.0.1:8086/swagger`
+- Health: `http://127.0.0.1:8086/health`
+- Prometheus metrics: `http://127.0.0.1:8086/metrics`
+- Admin: `http://127.0.0.1:4211`
+- User Web/PWA: `http://127.0.0.1:4210`
 - PostgreSQL: `localhost:5432`
 - RabbitMQ management: `http://localhost:15672`
 - MinIO console: `http://localhost:9001`

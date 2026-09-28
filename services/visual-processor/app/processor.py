@@ -67,11 +67,29 @@ def _resize_for_processing(image: np.ndarray, max_side: int = 1024) -> np.ndarra
 
 def _resolve_art_style(requested: str, semantic_hints: tuple[dict, ...]) -> str:
     normalized = (requested or "auto").strip().lower()
-    aliases = {"animal": "animals", "animals": "animals", "portraiture": "portrait", "portrait": "portrait", "fantasy": "fantasy", "nature": "nature", "architecture": "architecture", "mandala": "mandala", "kawaii": "kawaii", "natural": "natural"}
+    aliases = {
+        "animal": "animals", "animals": "animals",
+        "portraiture": "portrait", "portrait": "portrait",
+        "fantasy": "fantasy", "nature": "nature",
+        "architecture": "architecture", "mandala": "mandala",
+        "kawaii": "kawaii", "natural": "natural",
+        "andino": "andino", "andean": "andino", "andino-vivo": "andino",
+        "galactico": "galactico", "galactic": "galactico",
+        "space-opera": "space-opera", "space opera": "space-opera",
+        "comic": "comic", "comic-classic": "comic", "comic-pop": "comic",
+        "anime": "anime", "anime-classic": "anime", "anime-epic": "anime",
+        "mecha": "mecha", "chibi": "chibi",
+    }
     if normalized != "auto":
         return aliases.get(normalized, "natural")
     tokens = " ".join(str(h.get("tag", "")) + " " + str(h.get("role", "")) for h in semantic_hints).lower()
     rules = (
+        ("andino", ("andes", "andean", "andino", "paramo", "volcano", "volcan", "llama", "alpaca", "condor")),
+        ("space-opera", ("space opera", "spaceship", "starship", "galactic", "galaxy", "planet", "droid")),
+        ("comic", ("comic", "superhero", "villain", "noir", "pulp", "graphic novel")),
+        ("anime", ("anime", "manga", "shonen", "shojo", "samurai")),
+        ("mecha", ("mecha", "giant robot")),
+        ("chibi", ("chibi",)),
         ("animals", ("animal", "bird", "cat", "dog", "fish", "wildlife", "pet")),
         ("portrait", ("face", "person", "portrait", "human", "skin")),
         ("architecture", ("building", "architecture", "house", "city", "facade")),
@@ -95,19 +113,38 @@ def _art_style_profile(style: str) -> dict[str, float]:
         "architecture": {"smooth": 0.82, "saturation": 0.94, "brightness": 1.00},
         "mandala": {"smooth": 0.78, "saturation": 1.16, "brightness": 1.02},
         "kawaii": {"smooth": 1.18, "saturation": 1.14, "brightness": 1.08},
-        "fantasy": {"smooth": 0.90, "saturation": 1.18, "brightness": 0.99},
-    }.get(style, {"smooth": 1.0, "saturation": 1.0, "brightness": 1.0})
+        "fantasy": {"smooth": 0.90, "saturation": 1.20, "brightness": 1.00},
+        "andino": {"smooth": 0.88, "saturation": 1.24, "brightness": 1.03},
+        "galactico": {"smooth": 0.82, "saturation": 1.34, "brightness": 0.98},
+        "space-opera": {"smooth": 0.82, "saturation": 1.32, "brightness": 0.98},
+        "comic": {"smooth": 0.74, "saturation": 1.36, "brightness": 1.01},
+        "anime": {"smooth": 0.88, "saturation": 1.28, "brightness": 1.04},
+        "mecha": {"smooth": 0.72, "saturation": 1.24, "brightness": 0.99},
+        "chibi": {"smooth": 1.10, "saturation": 1.32, "brightness": 1.07},
+    }.get(style, {"smooth": 1.0, "saturation": 1.08, "brightness": 1.01})
 
 
 def _apply_art_palette(palette: list[str], art_style: str) -> list[str]:
     profile = _art_style_profile(art_style)
+    vivid_styles = {"andino", "galactico", "space-opera", "comic", "anime", "mecha", "chibi", "fantasy", "mandala"}
+    saturation_floor = 54.0 if art_style in vivid_styles else 38.0
     result: list[str] = []
     for color in palette:
         bgr = np.uint8([[list(_hex_to_bgr(color))]])
         hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)[0, 0].astype(np.float32)
-        if hsv[1] > 20:
-            hsv[1] = np.clip(hsv[1] * profile["saturation"], 0, 255)
-        hsv[2] = np.clip(hsv[2] * profile["brightness"], 18, 252)
+
+        # Preserve true neutrals (clouds, metal, stone, skin highlights)
+        # byte-for-byte. Chromatic colors receive the vivid treatment.
+        if hsv[1] <= 18:
+            result.append(color.upper())
+            continue
+        hsv[1] = np.clip(max(saturation_floor, hsv[1] * profile["saturation"]), 0, 255)
+        hsv[2] = np.clip(hsv[2] * profile["brightness"], 16, 252)
+
+        # Comic/space/mecha benefit from deeper dark values instead of grey haze.
+        if art_style in {"galactico", "space-opera", "comic", "mecha"} and hsv[2] < 118:
+            hsv[2] = np.clip(hsv[2] * 0.88, 14, 118)
+
         result.append(_hex_from_bgr(cv2.cvtColor(np.uint8([[hsv]]), cv2.COLOR_HSV2BGR)[0, 0]))
     return result
 
@@ -190,9 +227,34 @@ def _cluster_colors(lab: np.ndarray, color_count: int, difficulty: str = "Normal
 
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 40, 0.30)
     cv2.setRNGSeed(42)
-    _, raw_labels, _ = cv2.kmeans(
-        features, color_count, None, criteria, 3, cv2.KMEANS_PP_CENTERS
+
+    # Training every full-resolution pixel becomes prohibitively expensive at
+    # 100-150 colors. Train deterministically on an evenly distributed sample,
+    # then classify the full image in bounded-memory batches.
+    training_limit = 120_000
+    if len(features) > training_limit:
+        sample_indices = np.linspace(0, len(features) - 1, training_limit, dtype=np.int32)
+        training_features = features[sample_indices]
+    else:
+        training_features = features
+
+    _, training_labels, feature_centers = cv2.kmeans(
+        training_features, color_count, None, criteria, 3, cv2.KMEANS_PP_CENTERS
     )
+    if len(training_features) == len(features):
+        raw_labels = training_labels
+    else:
+        raw_labels = np.empty((len(features), 1), dtype=np.int32)
+        batch_size = 16_384
+        for start in range(0, len(features), batch_size):
+            end = min(start + batch_size, len(features))
+            block = features[start:end]
+            distances = np.sum(
+                (block[:, None, :] - feature_centers[None, :, :]) ** 2,
+                axis=2,
+            )
+            raw_labels[start:end, 0] = np.argmin(distances, axis=1)
+
     labels = raw_labels.reshape((height, width)).astype(np.int32)
 
     # Palette centers must remain true LAB image colors, not LAB+XY feature
@@ -273,20 +335,20 @@ def _harmonize_palette(palette: list[str]) -> list[str]:
     for color in palette:
         blue, green, red = _hex_to_bgr(color)
         hsv_values.append(cv2.cvtColor(np.uint8([[[blue, green, red]]]), cv2.COLOR_BGR2HSV)[0, 0].astype(np.float32))
-    chromatic = [value for value in hsv_values if value[1] >= 36]
-    median_s = float(np.median([value[1] for value in chromatic])) if chromatic else 0.0
-    median_v = float(np.median([value[2] for value in hsv_values]))
     result: list[str] = []
     previous: list[np.ndarray] = []
     for hsv in hsv_values:
         tuned = hsv.copy()
-        if tuned[1] >= 36:
-            tuned[1] = np.clip(0.78 * tuned[1] + 0.22 * max(tuned[1], median_s), 0, 255)
-            tuned[2] = np.clip(0.88 * tuned[2] + 0.12 * median_v, 24, 252)
+        if tuned[1] >= 30:
+            # S40 vivid harmonizer: keep the source chroma/value and only
+            # separate nearly-identical paint swatches. Do not pull colors
+            # toward a common median (the old behavior created pastel palettes).
+            tuned[1] = np.clip(tuned[1] * 1.04, 0, 255)
             for prior in previous:
                 hue_distance = min(abs(tuned[0] - prior[0]), 180.0 - abs(tuned[0] - prior[0]))
-                if hue_distance < 3.0 and abs(tuned[2] - prior[2]) < 12.0:
-                    tuned[2] = np.clip(tuned[2] + (14.0 if tuned[2] <= 220 else -14.0), 24, 252)
+                if hue_distance < 3.0 and abs(tuned[2] - prior[2]) < 14.0:
+                    tuned[2] = np.clip(tuned[2] + (16.0 if tuned[2] <= 214 else -16.0), 18, 252)
+                    tuned[1] = np.clip(tuned[1] + 8.0, 0, 255)
                     break
         previous.append(tuned.copy())
         result.append(_hex_from_bgr(cv2.cvtColor(np.uint8([[tuned]]), cv2.COLOR_HSV2BGR)[0, 0]))
@@ -314,6 +376,24 @@ def _apply_style_palette(palette: list[str], style_code: str) -> list[str]:
             hsv[1] = np.clip(hsv[1] * 1.10, 0, 255); hsv[2] = np.clip(hsv[2] * 1.16 + 10, 0, 255)
         elif style == "eclipse":
             hsv[1] = np.clip(hsv[1] * 1.24, 0, 255); hsv[2] = np.clip(hsv[2] * 0.62, 18, 190)
+        elif style in {"andino", "andino-vivo"}:
+            hsv[1] = np.clip(max(58.0, hsv[1] * (1.18 if style == "andino" else 1.30)), 0, 255)
+            hsv[2] = np.clip((hsv[2] - 128) * 1.10 + 132, 24, 252)
+        elif style in {"galactico", "space-opera"}:
+            hsv[1] = np.clip(max(64.0, hsv[1] * 1.34), 0, 255)
+            hsv[2] = np.clip((hsv[2] - 128) * 1.22 + 122, 14, 252)
+        elif style in {"comic-classic", "comic-pop"}:
+            hsv[1] = np.clip(max(68.0, hsv[1] * (1.28 if style == "comic-classic" else 1.42)), 0, 255)
+            hsv[2] = np.clip((hsv[2] - 128) * 1.18 + 130, 20, 252)
+        elif style in {"anime-classic", "anime-epic", "chibi"}:
+            multiplier = 1.22 if style == "anime-classic" else 1.34
+            if style == "chibi":
+                multiplier = 1.38
+            hsv[1] = np.clip(max(54.0, hsv[1] * multiplier), 0, 255)
+            hsv[2] = np.clip(hsv[2] * (1.04 if style != "anime-epic" else 1.00), 24, 252)
+        elif style == "mecha":
+            hsv[1] = np.clip(max(46.0, hsv[1] * 1.18), 0, 255)
+            hsv[2] = np.clip((hsv[2] - 128) * 1.24 + 124, 14, 246)
         result.append(_hex_from_bgr(cv2.cvtColor(np.uint8([[hsv]]), cv2.COLOR_HSV2BGR)[0, 0]))
     return result
 
@@ -467,6 +547,108 @@ def _merge_micro_regions(labels: np.ndarray, centers: np.ndarray, options: Proce
     return result
 
 
+
+
+def _watershed_markers(lab: np.ndarray, target_regions: int) -> np.ndarray:
+    """Create deterministic edge-aware watershed seeds near the requested density."""
+    height, width = lab.shape[:2]
+    image_area = max(1, height * width)
+    target = max(4, min(int(target_regions), max(4, image_area // 36)))
+    aspect = width / max(1.0, float(height))
+    cols = max(2, int(round(math.sqrt(target * aspect))))
+    rows = max(2, int(math.ceil(target / cols)))
+    gradient = _edge_strength(lab)
+    markers = np.zeros((height, width), dtype=np.int32)
+    marker_id = 1
+    search_radius = max(2, int(round(math.sqrt(image_area / target) * 0.22)))
+
+    for row in range(rows):
+        if marker_id > target:
+            break
+        cy = int(round((row + 0.5) * height / rows))
+        for col in range(cols):
+            if marker_id > target:
+                break
+            cx = int(round((col + 0.5) * width / cols))
+            x0 = max(1, cx - search_radius)
+            x1 = min(width - 1, cx + search_radius + 1)
+            y0 = max(1, cy - search_radius)
+            y1 = min(height - 1, cy + search_radius + 1)
+            patch = gradient[y0:y1, x0:x1]
+            if patch.size:
+                py, px = np.unravel_index(int(np.argmin(patch)), patch.shape)
+                sx, sy = x0 + int(px), y0 + int(py)
+            else:
+                sx = min(width - 2, max(1, cx))
+                sy = min(height - 2, max(1, cy))
+            cv2.circle(markers, (sx, sy), 1, marker_id, -1)
+            marker_id += 1
+    return markers
+
+
+def _fill_watershed_boundaries(region_labels: np.ndarray) -> np.ndarray:
+    """Replace thin watershed boundary pixels with a deterministic neighbouring region."""
+    result = region_labels.astype(np.int32).copy()
+    unresolved = result < 0
+    for _ in range(8):
+        if not np.any(unresolved):
+            break
+        changed = np.zeros_like(unresolved)
+        for dy, dx in ((-1, 0), (0, -1), (0, 1), (1, 0), (-1, -1), (-1, 1), (1, -1), (1, 1)):
+            shifted = np.full_like(result, -1)
+            src_y0 = max(0, -dy); src_y1 = result.shape[0] - max(0, dy)
+            src_x0 = max(0, -dx); src_x1 = result.shape[1] - max(0, dx)
+            dst_y0 = max(0, dy); dst_y1 = result.shape[0] - max(0, -dy)
+            dst_x0 = max(0, dx); dst_x1 = result.shape[1] - max(0, -dx)
+            shifted[dst_y0:dst_y1, dst_x0:dst_x1] = result[src_y0:src_y1, src_x0:src_x1]
+            valid = unresolved & (shifted >= 0)
+            result[valid] = shifted[valid]
+            changed |= valid
+            unresolved = result < 0
+        if not np.any(changed):
+            break
+    if np.any(result < 0):
+        result[result < 0] = 0
+    return result
+
+
+def _assign_regions_to_palette(region_labels: np.ndarray, lab: np.ndarray, centers: np.ndarray) -> np.ndarray:
+    """Map each spatial region to the nearest perceptual palette center."""
+    region_count = int(region_labels.max()) + 1
+    flat_regions = region_labels.reshape(-1)
+    flat_lab = lab.reshape((-1, 3)).astype(np.float64)
+    counts = np.bincount(flat_regions, minlength=region_count).astype(np.float64)
+    sums = np.stack(
+        [np.bincount(flat_regions, weights=flat_lab[:, channel], minlength=region_count) for channel in range(3)],
+        axis=1,
+    )
+    means = sums / np.maximum(1.0, counts[:, None])
+    center_values = centers.astype(np.float64)
+    distances = np.sum((means[:, None, :] - center_values[None, :, :]) ** 2, axis=2)
+    return np.argmin(distances, axis=1).astype(np.int32)
+
+
+def _segment_spatial_regions(lab: np.ndarray, centers: np.ndarray, options: ProcessorOptions) -> tuple[np.ndarray, np.ndarray]:
+    """
+    Visual Engine V2: spatial segmentation is independent from palette quantization.
+    Many paintable regions may intentionally share the same palette color.
+    """
+    markers = _watershed_markers(lab, options.target_regions)
+    bgr = cv2.cvtColor(lab, cv2.COLOR_LAB2BGR)
+    watershed = cv2.watershed(bgr.copy(), markers.copy())
+    positive = watershed > 0
+    if not np.any(positive):
+        raise ValueError("SPATIAL_SEGMENTATION_FAILED")
+    watershed = watershed.astype(np.int32) - 1
+    watershed = _fill_watershed_boundaries(watershed)
+
+    # Normalize marker ids after watershed because some seeds can be absorbed.
+    unique_ids, normalized = np.unique(watershed, return_inverse=True)
+    region_labels = normalized.reshape(watershed.shape).astype(np.int32)
+    region_colors = _assign_regions_to_palette(region_labels, lab, centers)
+    return region_labels, region_colors
+
+
 def _minimum_palette_delta_e(centers: np.ndarray) -> float:
     if len(centers) < 2:
         return 0.0
@@ -545,17 +727,18 @@ def _is_sliver_region(contour: np.ndarray, image_area: int) -> bool:
     area_ratio = area / max(1, image_area)
     return area_ratio < 0.03 and (aspect > 8.0 or _contour_compactness(contour) < 0.06)
 
-def _extract_regions(labels: np.ndarray, options: ProcessorOptions) -> list[Region]:
+def _extract_regions(labels: np.ndarray, options: ProcessorOptions, region_color_ids: np.ndarray | None = None) -> list[Region]:
     height, width = labels.shape
     image_area = width * height
     minimum_area = max(10, int(_micro_region_threshold(labels.shape, options) * 0.35))
     regions: list[Region] = []
     next_id = 1
-    for color_id in range(int(labels.max()) + 1):
-        mask = np.where(labels == color_id, 255, 0).astype(np.uint8)
+    for spatial_id in range(int(labels.max()) + 1):
+        mask = np.where(labels == spatial_id, 255, 0).astype(np.uint8)
         kernel = np.ones((3, 3), np.uint8)
         mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=1)
         count, components, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+        palette_index = int(region_color_ids[spatial_id]) if region_color_ids is not None else spatial_id
         for component_id in range(1, count):
             area = int(stats[component_id, cv2.CC_STAT_AREA])
             if area < minimum_area:
@@ -574,7 +757,7 @@ def _extract_regions(labels: np.ndarray, options: ProcessorOptions) -> list[Regi
             if not path:
                 continue
             label_x, label_y, label_radius = _label_anchor(component_mask, width, height)
-            region = Region(next_id, color_id + 1, area, contour,
+            region = Region(next_id, palette_index + 1, area, contour,
                             label_x, label_y, _bounds(contour, width, height), path)
             region.label_radius = label_radius
             _configure_label_readability(region)
@@ -689,28 +872,46 @@ def _write_svg(path: Path, regions: list[Region], palette: list[str], line_art: 
     lines.append("</svg>")
     path.write_text("\n".join(lines), encoding="utf-8")
 
+
+def _palette_capacity(options: ProcessorOptions, art_style: str) -> int:
+    difficulty_cap = {
+        "kids": 20,
+        "easy": 40,
+        "normal": 80,
+        "detailed": 120,
+        "master": 150,
+    }.get(options.difficulty.lower(), 80)
+    style_bonus = 10 if art_style in {"nature", "animals", "fantasy", "mandala"} else 0
+    return max(3, min(options.max_colors, difficulty_cap + style_bonus, 150))
+
+
 def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions) -> dict:
     image = _resize_for_processing(_read_image(source_path))
     resolved_art_style = _resolve_art_style(options.art_style, options.semantic_hints)
     illustrated = _illustration_preprocess(image, options.difficulty, resolved_art_style)
     lab = _preprocess(illustrated, options.edge_sensitivity)
-    color_count = max(3, min(options.max_colors, 24))
-    labels, centers = _cluster_colors(lab, color_count, options.difficulty)
-    labels, centers = _merge_similar_clusters(labels, centers, options.difficulty)
-    labels = _edge_aware_smooth_labels(labels, lab, options.edge_sensitivity)
-    labels = _merge_micro_regions(labels, centers, options)
+    color_count = _palette_capacity(options, resolved_art_style)
+    palette_labels, centers = _cluster_colors(lab, color_count, options.difficulty)
+    palette_labels, centers = _merge_similar_clusters(palette_labels, centers, options.difficulty)
+    palette_labels = _edge_aware_smooth_labels(palette_labels, lab, options.edge_sensitivity)
+    palette_labels = _merge_micro_regions(palette_labels, centers, options)
     palette = _vivid_palette(centers, options.saturation_boost, options.contrast_boost)
     palette = _harmonize_palette(palette)
     palette = _apply_art_palette(palette, resolved_art_style)
     palette = _apply_style_palette(palette, options.style_code)
-    regions = _extract_regions(labels, options)
-    _assign_semantics(regions, labels.shape, palette, options.semantic_hints)
+
+    # V2 separates spatial paintable regions from palette quantization.
+    # A region is assigned exactly one color, while many regions may share it.
+    region_labels, region_color_ids = _segment_spatial_regions(lab, centers, options)
+    labels = region_color_ids[region_labels]
+    regions = _extract_regions(region_labels, options, region_color_ids)
+    _assign_semantics(regions, region_labels.shape, palette, options.semantic_hints)
     if not regions:
         raise ValueError("NO_PLAYABLE_REGIONS")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     colored = _render_colored(labels, palette)
-    line_art = _render_line_art(labels, regions)
+    line_art = _render_line_art(region_labels, regions)
     special_preview = _render_style_preview(colored, line_art, options.style_code)
     cv2.imwrite(str(output_dir / "preview-colored.png"), colored)
     cv2.imwrite(str(output_dir / "preview-lineart.png"), line_art)
@@ -773,6 +974,13 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
         "difficulty": options.difficulty,
         "styleCode": options.style_code,
         "artStyle": resolved_art_style,
+        "segmentation": {
+            "engine": "v2-edge-watershed",
+            "targetRegions": int(options.target_regions),
+            "spatialRegionCount": int(region_labels.max()) + 1,
+            "paletteColorCount": len(palette),
+            "paletteIndependent": True,
+        },
         "palette": palette_payload,
         "regions": region_payload,
         "adjustments": [],
@@ -798,6 +1006,13 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
         "lineArtWebpPath": str(output_dir / "lineart-preview.webp"),
         "specialPreviewPath": str(output_dir / "special-preview.webp"),
         "artStyle": resolved_art_style,
+        "segmentation": {
+            "engine": "v2-edge-watershed",
+            "targetRegions": int(options.target_regions),
+            "spatialRegionCount": int(region_labels.max()) + 1,
+            "paletteColorCount": len(palette),
+            "paletteIndependent": True,
+        },
         "effect": _style_effect_metadata(options.style_code),
         "qa": qa,
     }
@@ -829,27 +1044,37 @@ def _build_qa_report(regions, centers, shape, options, playable_area, image_area
     cramped_ratio = cramped_count / max(1, len(regions))
     issues = []
     score = 100
+    difficulty = options.difficulty.lower()
+    palette_delta_floor = {
+        "kids": 8.0, "easy": 7.0, "normal": 6.0, "detailed": 4.5, "master": 3.5,
+    }.get(difficulty, 6.0)
+    hidden_ratio_limit = {
+        "kids": 0.20, "easy": 0.35, "normal": 0.55, "detailed": 0.85, "master": 0.98,
+    }.get(difficulty, 0.55)
+    cramped_ratio_limit = {
+        "kids": 0.08, "easy": 0.15, "normal": 0.25, "detailed": 0.40, "master": 0.55,
+    }.get(difficulty, 0.25)
     if coverage < 0.98:
         score -= min(40, round((0.98 - coverage) * 200))
         issues.append({"severity": "Error", "code": "QA_COVERAGE", "message": f"Playable coverage is {coverage:.2%}."})
-    if minimum_delta < 6.0:
+    if minimum_delta < palette_delta_floor:
         score -= 12
-        issues.append({"severity": "Warning", "code": "QA_PALETTE_DELTA", "message": f"Minimum palette Delta-E is {minimum_delta:.2f}."})
+        issues.append({"severity": "Warning", "code": "QA_PALETTE_DELTA", "message": f"Minimum palette Delta-E is {minimum_delta:.2f} (floor {palette_delta_floor:.2f})."})
     if tiny_ratio > 0.15:
         score -= 12
         issues.append({"severity": "Warning", "code": "QA_MICRO_REGIONS", "message": f"Micro-region ratio is {tiny_ratio:.2%}."})
-    if hidden_ratio > 0.50:
+    if hidden_ratio > hidden_ratio_limit:
         score -= 8
-        issues.append({"severity": "Warning", "code": "QA_LABEL_READABILITY", "message": f"Hidden label ratio is {hidden_ratio:.2%}."})
+        issues.append({"severity": "Warning", "code": "QA_LABEL_READABILITY", "message": f"Hidden-at-base label ratio is {hidden_ratio:.2%}; progressive zoom limit is {hidden_ratio_limit:.2%}."})
     if sliver_ratio > 0.05:
         score -= 10
         issues.append({"severity": "Warning", "code": "QA_SLIVER_REGIONS", "message": f"Sliver-region ratio is {sliver_ratio:.2%}."})
     if average_compactness < 0.18:
         score -= 8
         issues.append({"severity": "Warning", "code": "QA_CONTOUR_COMPLEXITY", "message": f"Average contour compactness is {average_compactness:.3f}."})
-    if cramped_ratio > 0.25:
+    if cramped_ratio > cramped_ratio_limit:
         score -= 8
-        issues.append({"severity": "Warning", "code": "QA_LABEL_CLEARANCE", "message": f"Cramped-label ratio is {cramped_ratio:.2%}."})
+        issues.append({"severity": "Warning", "code": "QA_LABEL_CLEARANCE", "message": f"Cramped-label ratio is {cramped_ratio:.2%}; limit is {cramped_ratio_limit:.2%}."})
     if semantic_coverage < 0.90:
         score -= 6
         issues.append({"severity": "Info", "code": "QA_SEMANTIC_COVERAGE", "message": f"Semantic coverage is {semantic_coverage:.2%}."})
@@ -870,8 +1095,8 @@ def _build_qa_report(regions, centers, shape, options, playable_area, image_area
 
 def _variant_options(base: ProcessorOptions, difficulty: str) -> ProcessorOptions:
     code = difficulty.lower()
-    region_factor = {"kids": 0.45, "easy": 0.70, "normal": 1.0, "detailed": 1.55, "master": 2.2}[code]
-    color_adjust = {"kids": -3, "easy": -1, "normal": 0, "detailed": 3, "master": 6}[code]
+    region_factor = {"kids": 0.30, "easy": 0.70, "normal": 1.50, "detailed": 2.75, "master": 4.00}[code]
+    color_adjust = {"kids": -8, "easy": 0, "normal": 24, "detailed": 64, "master": 110}[code]
     simplify = {
         "kids": max(base.simplification_tolerance, 0.68),
         "easy": max(base.simplification_tolerance, 0.52),
@@ -880,8 +1105,8 @@ def _variant_options(base: ProcessorOptions, difficulty: str) -> ProcessorOption
         "master": min(base.simplification_tolerance, 0.22),
     }[code]
     return ProcessorOptions(
-        target_regions=max(12, min(360, round(base.target_regions * region_factor))),
-        max_colors=max(4, min(24, base.max_colors + color_adjust)),
+        target_regions=max(12, min(2500, round(base.target_regions * region_factor))),
+        max_colors=max(4, min(150, base.max_colors + color_adjust)),
         simplification_tolerance=simplify,
         edge_sensitivity=min(1.0, base.edge_sensitivity + (0.08 if code in {"detailed", "master"} else 0.0)),
         curve_smoothness=base.curve_smoothness,

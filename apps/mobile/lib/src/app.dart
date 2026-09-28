@@ -343,7 +343,8 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
       return query.isEmpty || x.title.toLowerCase().contains(query) || x.category.toLowerCase().contains(query);
     }).toList();
     final remoteItems = _remote?.items ?? const <CatalogArtwork>[];
-    final useRemote = _remote != null;
+    final localItems = fallback.where((local) => !remoteItems.any((remote) => remote.id == local.id)).toList();
+    final totalItems = remoteItems.length + localItems.length;
     final countries = _discovery?.countries ?? const <CatalogCountry>[];
     final collections = _discovery?.collections ?? const <CatalogCollection>[];
 
@@ -393,46 +394,52 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
       )),
       SliverToBoxAdapter(child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
-        child: Text(useRemote ? '${_remote!.total} resultados' : 'Modo sin conexion · ${fallback.length} resultados', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black45)),
+        child: Text('$totalItems resultados · ${remoteItems.length} API + ${localItems.length} locales', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black45)),
       )),
       SliverPadding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
         sliver: SliverGrid.builder(
-          itemCount: useRemote ? remoteItems.length : fallback.length,
+          itemCount: totalItems,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 2, mainAxisSpacing: 14, crossAxisSpacing: 14, childAspectRatio: .72),
-          itemBuilder: (_, i) => useRemote ? _CatalogRemoteCard(artwork: remoteItems[i]) : ArtworkCard(artwork: fallback[i]),
+          itemBuilder: (_, i) => i < remoteItems.length
+              ? _CatalogRemoteCard(artwork: remoteItems[i])
+              : ArtworkCard(artwork: localItems[i - remoteItems.length]),
         ),
       ),
     ]);
   }
 }
 
-class _CatalogRemoteCard extends StatelessWidget {
+class _CatalogRemoteCard extends ConsumerWidget {
   const _CatalogRemoteCard({required this.artwork});
   final CatalogArtwork artwork;
+
   @override
-  Widget build(BuildContext context) => Material(
-    color: Colors.white,
-    borderRadius: BorderRadius.circular(22),
-    clipBehavior: Clip.antiAlias,
-    child: InkWell(
-      onTap: () => context.push('/color/${artwork.id}'),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Expanded(child: Container(
-          color: const Color(0xFFF4F2EE),
-          alignment: Alignment.center,
-          child: artwork.thumbnailUrl != null && artwork.thumbnailUrl!.startsWith('http')
-              ? Image.network(artwork.thumbnailUrl!, fit: BoxFit.cover, width: double.infinity, height: double.infinity, errorBuilder: (_, __, ___) => const Icon(Icons.palette_outlined, size: 54, color: Colors.black26))
-              : const Icon(Icons.palette_outlined, size: 54, color: Colors.black26),
-        )),
-        Padding(padding: const EdgeInsets.fromLTRB(12, 10, 12, 12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(artwork.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
-          const SizedBox(height: 3),
-          Text('${artwork.countryCode ?? 'Global'} · ${artwork.regionCount} zonas', style: const TextStyle(fontSize: 11, color: Colors.black45)),
-        ])),
-      ]),
-    ),
-  );
+  Widget build(BuildContext context, WidgetRef ref) {
+    final imageUrl = artwork.resolveThumbnailUrl(ref.watch(appConfigProvider).apiBaseUrl);
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(22),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => context.push('/color/${artwork.id}'),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(child: Container(
+            color: const Color(0xFFF4F2EE),
+            alignment: Alignment.center,
+            child: imageUrl != null
+                ? Image.network(imageUrl, fit: BoxFit.cover, width: double.infinity, height: double.infinity, errorBuilder: (_, __, ___) => const Icon(Icons.palette_outlined, size: 54, color: Colors.black26))
+                : const Icon(Icons.palette_outlined, size: 54, color: Colors.black26),
+          )),
+          Padding(padding: const EdgeInsets.fromLTRB(12, 10, 12, 12), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(artwork.title, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800)),
+            const SizedBox(height: 3),
+            Text('${artwork.countryCode ?? 'Global'} · ${artwork.regionCount} zonas', style: const TextStyle(fontSize: 11, color: Colors.black45)),
+          ])),
+        ]),
+      ),
+    );
+  }
 }
 class ProfilePage extends ConsumerWidget {
   const ProfilePage({super.key});

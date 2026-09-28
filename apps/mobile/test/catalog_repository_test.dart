@@ -34,6 +34,26 @@ void main() {
     expect(collection.name, 'Andes');
     expect(collection.artworkCount, 8);
   });
+
+  test('catalog artwork resolves relative and absolute thumbnail URLs', () {
+    const relative = CatalogArtwork(
+      id: 'a1', title: 'Andes', countryCode: 'EC', difficulty: 2,
+      regionCount: 180, thumbnailUrl: '/api/catalog/artworks/a1/thumbnail',
+    );
+    const absolute = CatalogArtwork(
+      id: 'a2', title: 'Space', countryCode: null, difficulty: 4,
+      regionCount: 625, thumbnailUrl: 'https://cdn.example.com/a2.webp',
+    );
+    expect(
+      relative.resolveThumbnailUrl('http://127.0.0.1:8086'),
+      'http://127.0.0.1:8086/api/catalog/artworks/a1/thumbnail',
+    );
+    expect(
+      absolute.resolveThumbnailUrl('http://127.0.0.1:8086'),
+      'https://cdn.example.com/a2.webp',
+    );
+  });
+
   test('recommendation profile infers dominant country and average difficulty', () {
     final profile = RecommendationProfile.infer([
       const CatalogArtwork(id: '1', title: 'A', countryCode: 'EC', difficulty: 2, regionCount: 20, thumbnailUrl: null),

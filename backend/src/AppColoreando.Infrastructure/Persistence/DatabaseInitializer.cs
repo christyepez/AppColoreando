@@ -31,7 +31,29 @@ public static class DatabaseInitializer
             if (!await db.Countries.AnyAsync(x => x.Code == country.Item1, ct)) db.Countries.Add(new Country { Code = country.Item1, Name = country.Item2 });
         }
 
-        var categories = new[] { ("Landscapes", "landscapes"), ("Culture", "culture"), ("Geometry", "geometry"), ("Animals", "animals") };
+        var categories = new[]
+        {
+            ("Landscapes", "landscapes"),
+            ("Culture", "culture"),
+            ("Geometry", "geometry"),
+            ("Animals", "animals"),
+            ("Paisajes Andinos", "andean-landscapes"),
+            ("Cultura Andina", "andean-culture"),
+            ("Fauna Andina", "andean-fauna"),
+            ("Space Opera", "space-opera"),
+            ("Naves Galacticas", "galactic-ships"),
+            ("Mundos Galacticos", "galactic-worlds"),
+            ("Heroes Comic", "comic-heroes"),
+            ("Villanos Comic", "comic-villains"),
+            ("Ciudad Comic", "comic-city"),
+            ("Accion Comic", "comic-action"),
+            ("Comic Noir", "comic-noir"),
+            ("Aventura Anime", "anime-adventure"),
+            ("Fantasia Anime", "anime-fantasy"),
+            ("Mecha Anime", "anime-mecha"),
+            ("Chibi", "anime-chibi"),
+            ("Retratos Anime", "anime-portraits"),
+        };
         foreach (var category in categories)
         {
             if (!await db.Categories.AnyAsync(x => x.Slug == category.Item2, ct)) db.Categories.Add(new Category { Name = category.Item1, Slug = category.Item2 });
@@ -44,7 +66,24 @@ public static class DatabaseInitializer
 
         foreach (var preset in StylePresetSeed.Items)
         {
-            if (!await db.StylePresets.AnyAsync(x => x.Code == preset.Code, ct)) db.StylePresets.Add(preset);
+            var existing = await db.StylePresets.SingleOrDefaultAsync(x => x.Code == preset.Code, ct);
+            if (existing is null)
+            {
+                db.StylePresets.Add(preset);
+                continue;
+            }
+
+            existing.Name = preset.Name;
+            existing.TargetRegionCount = preset.TargetRegionCount;
+            existing.MinRegionArea = preset.MinRegionArea;
+            existing.MaxColors = preset.MaxColors;
+            existing.SimplificationTolerance = preset.SimplificationTolerance;
+            existing.EdgeSensitivity = preset.EdgeSensitivity;
+            existing.CurveSmoothness = preset.CurveSmoothness;
+            existing.SaturationBoost = preset.SaturationBoost;
+            existing.ContrastBoost = preset.ContrastBoost;
+            existing.SemanticMergeEnabled = preset.SemanticMergeEnabled;
+            existing.IsActive = preset.IsActive;
         }
 
         await db.SaveChangesAsync(ct);
@@ -69,20 +108,53 @@ public static class DatabaseInitializer
             });
         }
 
-        foreach (var collection in new[] { ("Ecuador Originals", "ecuador-originals", "EC"), ("Colombia Originals", "colombia-originals", "CO"), ("South America Starter", "south-america-starter", "SA"), ("USA Starter", "usa-starter", "US") })
+        foreach (var collection in new[]
         {
-            if (!await db.Collections.AnyAsync(x => x.Slug == collection.Item2, ct)) db.Collections.Add(new Collection { Name = collection.Item1, Slug = collection.Item2, CountryCode = collection.Item3, Description = "Safe original demo collection." });
+            ("Ecuador Originals", "ecuador-originals", "EC"),
+            ("Colombia Originals", "colombia-originals", "CO"),
+            ("South America Starter", "south-america-starter", "SA"),
+            ("USA Starter", "usa-starter", "US"),
+            ("Andes Ecuador", "andes-ecuador", "EC"),
+            ("Andes Sudamerica", "andes-sudamerica", "SA"),
+            ("Paramo y Lagunas", "paramo-lagunas", "EC"),
+            ("Galaxias Epicas", "galaxias-epicas", "SA"),
+            ("Space Opera Originals", "space-opera-originals", "SA"),
+            ("Comic Originals", "comic-originals", "SA"),
+            ("Anime Originals", "anime-originals", "SA"),
+            ("Mecha Originals", "mecha-originals", "SA"),
+        })
+        {
+            if (!await db.Collections.AnyAsync(x => x.Slug == collection.Item2, ct))
+            {
+                db.Collections.Add(new Collection
+                {
+                    Name = collection.Item1,
+                    Slug = collection.Item2,
+                    CountryCode = collection.Item3,
+                    Description = "Original AppColoreando collection."
+                });
+            }
         }
 
-        var adminEmail = configuration["Seed:AdminEmail"];
+        var adminEmail = configuration["Seed:AdminEmail"]?.Trim().ToLowerInvariant();
         var adminPassword = configuration["Seed:AdminPassword"];
-        if (!string.IsNullOrWhiteSpace(adminEmail) && !string.IsNullOrWhiteSpace(adminPassword) && !await db.Users.AnyAsync(x => x.Email == adminEmail.ToLower(), ct))
+        if (!string.IsNullOrWhiteSpace(adminEmail) && !string.IsNullOrWhiteSpace(adminPassword))
         {
             var hasher = services.GetRequiredService<IPasswordHasher<AppUser>>();
-            var admin = new AppUser { Email = adminEmail.Trim().ToLowerInvariant(), DisplayName = "Administrator", Role = AppRole.Admin.ToString() };
-            admin.PasswordHash = hasher.HashPassword(admin, adminPassword);
-            db.Users.Add(admin);
-            db.UserProfiles.Add(new UserProfile { UserId = admin.Id, Locale = "es" });
+            var admin = await db.Users.SingleOrDefaultAsync(x => x.Email == adminEmail, ct);
+            if (admin is null)
+            {
+                admin = new AppUser { Email = adminEmail, DisplayName = "Administrator", Role = AppRole.Admin.ToString() };
+                admin.PasswordHash = hasher.HashPassword(admin, adminPassword);
+                db.Users.Add(admin);
+                db.UserProfiles.Add(new UserProfile { UserId = admin.Id, Locale = "es" });
+            }
+            else if (configuration.GetValue("Seed:ResetAdminPassword", false) && services.GetRequiredService<IHostEnvironment>().IsDevelopment())
+            {
+                admin.PasswordHash = hasher.HashPassword(admin, adminPassword);
+                admin.Role = AppRole.Admin.ToString();
+                admin.IsActive = true;
+            }
         }
 
         await db.SaveChangesAsync(ct);

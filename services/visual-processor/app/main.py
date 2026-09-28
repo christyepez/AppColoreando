@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from app.processor import ProcessorOptions, process_image, process_image_auto_repair, process_variants
 
-app = FastAPI(title="AppColoreando Visual Processor", version="0.15.0")
+app = FastAPI(title="AppColoreando Visual Processor", version="0.17.0")
 OUTPUT_ROOT = Path("/content-data/generation-jobs")
 
 
@@ -24,8 +24,8 @@ class ProcessRequest(BaseModel):
     sourcePath: str
     presetCode: str
     difficulty: str
-    targetRegions: int
-    maxColors: int
+    targetRegions: int = Field(ge=12, le=2500)
+    maxColors: int = Field(ge=3, le=150)
     simplificationTolerance: float
     edgeSensitivity: float
     curveSmoothness: float
@@ -36,7 +36,7 @@ class ProcessRequest(BaseModel):
     semanticHints: list[SemanticHint] = Field(default_factory=list)
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "healthy", "engine": "s39-auto-repair-engine"}
+    return {"status": "healthy", "engine": "s42-v2-edge-watershed-150-color-engine"}
 
 
 @app.post("/process")

@@ -102,3 +102,40 @@ Generated previews are served only through the authenticated Admin API. The arti
 Fine tuning is intentionally non-destructive. The processor output remains immutable and review changes are stored in `adjustments.json` beside the generation root manifest. Each override is keyed by `regionId` and may change color, semantic tag/role, base-label visibility, or add a reviewer note.
 
 The Admin Generation Studio reads generated `regions.json` and `palette.json`, applies authenticated CRUD operations to the overlay, and keeps every update attributable to the acting user. Runtime consumers must apply the overlay after loading the generated bundle, which is the integration target for S26.
+
+
+## S40 High-Density 150 Color Engine
+
+S40 raises the supported generation envelope to 150 palette colors and 2,500 target regions for Master artwork. Difficulty caps are Kids 20, Easy 40, Normal 80, Detailed 120 and Master 150 colors. Region density scales independently from palette size, so a color may be reused by many disconnected playable regions.
+
+High-density color clustering trains deterministically on at most 120,000 distributed feature samples and classifies the full-resolution image in bounded-memory batches. This keeps LAB/color, spatial, foreground and edge features while avoiding full K-Means training over every pixel at 100-150 colors.
+
+The Flutter runtime is explicitly optimized for the same envelope: region geometry is rendered through CustomPainter, normalized/scaled paths are cached, hit testing uses a spatial grid index, palette remaining-counts are computed in a single region pass, and labels are revealed according to the active zoom level. Automated stress tests cover 2,500 regions, a 150-color palette, spatial hit testing and full CustomPainter rendering.
+
+
+## S41 Vivid Themed Packs
+
+S41 adds four original themed content families to the high-density engine: Andean, Space Opera, Comic and Anime/Mecha. The initial local catalog contains at least 20 base artworks per family. Space Opera content is original genre-inspired material and does not seed proprietary franchise characters or assets.
+
+Color treatment now favors vivid, realistic source-related palettes instead of pastel harmonization. Chromatic swatches receive style-specific saturation/contrast treatment, while true neutrals are preserved byte-for-byte so stone, metal, clouds and neutral shadows are not unintentionally tinted. Andean profiles emphasize natural skies, vegetation, textiles and earth tones; Space Opera/Mecha use deeper darks and luminous accents; Comic profiles use clean high-contrast primaries; Anime profiles retain skin/neutral highlights while increasing hair, clothing and environment chroma.
+
+Flutter demo content now uses family-specific procedural scene geometry rather than a shared radial placeholder: layered mountains/lagoon/vegetation for Andean scenes, planets/stars/ships for Space Opera, urban panels/hero silhouettes/action bursts for Comics, and character/mecha compositions for Anime. The production visual-processor continues to generate playable vector regions independently of these local demo previews.
+
+Validation gates: Flutter stress tests cover 2,500 regions and 150 colors, themed packs are required to contain at least 20 base artworks each, and visual-processor tests validate vivid style profiles while preserving true neutrals.
+
+## S42 Visual Engine V2 - palette-independent spatial segmentation
+
+S42 decouples palette quantization from paintable-region generation. The processor first derives a perceptual palette and then creates edge-aware spatial regions with deterministic watershed markers. Each spatial region is assigned to the nearest palette center, so multiple independent paintable regions can share the same colorId without increasing the palette size.
+
+The engine emits segmentation metadata in bundle.json and manifest.json:
+- engine: v2-edge-watershed
+- targetRegions
+- spatialRegionCount
+- paletteColorCount
+- paletteIndependent: true
+
+Line-art boundaries now come from spatial-region labels rather than palette labels, so adjacent regions that share a color remain visibly distinct and independently paintable.
+
+QA thresholds are difficulty-aware. Master/Detailed content supports progressive label reveal through labelMinZoom instead of incorrectly treating hidden-at-base labels as a publishing defect. Palette Delta-E thresholds also scale with density while coverage, sliver, micro-region and contour-quality checks remain enforced.
+
+Validated S42 stress gate: 512x512 synthetic high-detail input, target 2500 regions, max 150 colors -> 2500 spatial regions, 146 palette colors, 100% playable coverage, QA 100/publishable, bundle about 4.45 MB and SVG about 3.42 MB. Flutter already has a 2500-region/150-color rendering stress test.
