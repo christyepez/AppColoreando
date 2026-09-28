@@ -256,3 +256,11 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Batch jobs remain individually reviewable/openable so editorial approval and publication continue to be per artwork.
 - Batch polling is independent from single-job polling and is disposed with the component.
 - Validation: Angular production build PASS on MarketingIndo; batch API/backend remained at 38/38 tests PASS.
+
+
+## S58 — Batch Safety / Prevalidation — Complete
+- Batch creation now validates the active style preset and every distinct source asset before creating the first generation job.
+- Rejected or missing assets fail the batch before any job is persisted or any RabbitMQ message is emitted, preventing validation-driven partial batches.
+- Single-job and batch flows reuse the same validated asset/preset rules while batch processing avoids repeated preset lookups.
+- Added regression coverage proving a later rejected asset leaves both the job repository and queue empty.
+- Validation: Application tests 24/24 PASS; full backend solution 39/39 PASS; Release build 0 warnings/0 errors.

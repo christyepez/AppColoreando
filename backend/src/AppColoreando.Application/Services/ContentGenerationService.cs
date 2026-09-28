@@ -67,32 +67,47 @@ public sealed class ContentGenerationService(
     public Task<IReadOnlyCollection<StylePresetDto>> GetStylePresetsAsync(CancellationToken ct) =>
         presets.ListAsync(ct);
 
-    public Task<GenerationJobDto> CreateGenerationJobAsync(
-        Guid userId, CreateGenerationJobRequest request, CancellationToken ct) =>
-        CreateGenerationJobInternalAsync(userId, request, batchId: null, ct);
-
-    private async Task<GenerationJobDto> CreateGenerationJobInternalAsync(
-        Guid userId,
-        CreateGenerationJobRequest request,
-        Guid? batchId,
-        CancellationToken ct)
+    public async Task<GenerationJobDto> CreateGenerationJobAsync(
+        Guid userId, CreateGenerationJobRequest request, CancellationToken ct)
     {
-        var asset = await assets.GetAsync(request.SourceAssetId, ct)
+        var asset = await GetValidatedAssetAsync(request.SourceAssetId, ct);
+        var preset = await GetActivePresetAsync(request.StylePresetId, ct);
+        return await CreateGenerationJobInternalAsync(
+            userId, asset, preset, request.Difficulty, batchId: null, ct);
+    }
+
+    private async Task<SourceAsset> GetValidatedAssetAsync(Guid sourceAssetId, CancellationToken ct)
+    {
+        var asset = await assets.GetAsync(sourceAssetId, ct)
             ?? throw new KeyNotFoundException("Source asset not found.");
         if (asset.Status is SourceAssetStatus.Rejected)
             throw new InvalidOperationException("Rejected source assets cannot be processed.");
+        return asset;
+    }
 
-        var preset = await presets.GetAsync(request.StylePresetId, ct)
+    private async Task<StylePreset> GetActivePresetAsync(Guid stylePresetId, CancellationToken ct)
+    {
+        var preset = await presets.GetAsync(stylePresetId, ct)
             ?? throw new KeyNotFoundException("Style preset not found.");
         if (!preset.IsActive)
             throw new InvalidOperationException("Style preset is inactive.");
+        return preset;
+    }
 
+    private async Task<GenerationJobDto> CreateGenerationJobInternalAsync(
+        Guid userId,
+        SourceAsset asset,
+        StylePreset preset,
+        GenerationDifficulty difficulty,
+        Guid? batchId,
+        CancellationToken ct)
+    {
         var job = new ArtworkGenerationJob
         {
             BatchId = batchId,
             SourceAssetId = asset.Id,
             StylePresetId = preset.Id,
-            Difficulty = request.Difficulty,
+            Difficulty = difficulty,
             Status = GenerationJobStatus.Queued,
             CreatedByUserId = userId
         };
@@ -106,7 +121,7 @@ public sealed class ContentGenerationService(
             ChangesJson = System.Text.Json.JsonSerializer.Serialize(new
             {
                 preset = preset.Code,
-                difficulty = request.Difficulty.ToString(),
+                difficulty = difficulty.ToString(),
                 batchId
             })
         });
@@ -127,14 +142,21 @@ public sealed class ContentGenerationService(
         if (sourceIds.Length > 100)
             throw new ArgumentException("A generation batch supports at most 100 source assets.");
 
-        var batchId = Guid.NewGuid();
-        var created = new List<GenerationJobDto>(sourceIds.Length);
+        var preset = await GetActivePresetAsync(request.StylePresetId, ct);
+        var validatedAssets = new List<SourceAsset>(sourceIds.Length);
         foreach (var sourceAssetId in sourceIds)
         {
             ct.ThrowIfCancellationRequested();
-            created.Add(await CreateGenerationJobInternalAsync(userId,
-                new CreateGenerationJobRequest(sourceAssetId, request.StylePresetId, request.Difficulty),
-                batchId, ct));
+            validatedAssets.Add(await GetValidatedAssetAsync(sourceAssetId, ct));
+        }
+
+        var batchId = Guid.NewGuid();
+        var created = new List<GenerationJobDto>(validatedAssets.Count);
+        foreach (var asset in validatedAssets)
+        {
+            ct.ThrowIfCancellationRequested();
+            created.Add(await CreateGenerationJobInternalAsync(
+                userId, asset, preset, request.Difficulty, batchId, ct));
         }
         audit.Add(new AuditLog
         {

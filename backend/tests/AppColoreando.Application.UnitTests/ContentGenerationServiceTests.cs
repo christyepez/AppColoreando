@@ -74,6 +74,31 @@ public sealed class ContentGenerationServiceTests
         Assert.Equal(jobs.Items.Select(x => x.Id).Order(), queue.EnqueuedJobIds.Order());
     }
 
+
+    [Fact]
+    public async Task Create_batch_validates_all_assets_before_queueing_any_job()
+    {
+        var valid = new SourceAsset { Id = Guid.NewGuid(), Status = SourceAssetStatus.Validated };
+        var rejected = new SourceAsset { Id = Guid.NewGuid(), Status = SourceAssetStatus.Rejected };
+        var preset = new StylePreset { Id = Guid.NewGuid(), Code = "natural", IsActive = true };
+        var jobs = new FakeJobRepository();
+        var queue = new FakeQueue();
+        var sut = CreateService(
+            new FakeAssetRepository(valid, rejected),
+            new FakePresetRepository(preset),
+            jobs,
+            queue: queue);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sut.CreateGenerationBatchAsync(
+                Guid.NewGuid(),
+                new CreateGenerationBatchRequest([valid.Id, rejected.Id], preset.Id),
+                CancellationToken.None));
+
+        Assert.Empty(jobs.Items);
+        Assert.Empty(queue.EnqueuedJobIds);
+    }
+
     [Fact]
     public async Task Create_batch_rejects_more_than_one_hundred_assets()
     {
