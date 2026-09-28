@@ -98,7 +98,7 @@ void main() {
 
     expect(picture, isNotNull);
     expect(stopwatch.elapsedMilliseconds, lessThan(5000));
-  });
+  }, tags: ['benchmark']);
 
 
   test('themed demo collections use distinct scene geometry', () {

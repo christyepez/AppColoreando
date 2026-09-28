@@ -1,6 +1,7 @@
 param(
     [string]$RepoRoot = (Split-Path $PSScriptRoot -Parent),
-    [switch]$SkipBuilds
+    [switch]$SkipBuilds,
+    [switch]$RunBenchmarks
 )
 
 $ErrorActionPreference = 'Stop'
@@ -90,8 +91,12 @@ if (-not $SkipBuilds) {
     Push-Location apps\mobile
     & $flutter analyze
     if ($LASTEXITCODE -ne 0) { $failures.Add('Flutter analyze failed') }
-    & $flutter test
-    if ($LASTEXITCODE -ne 0) { $failures.Add('Flutter tests failed') }
+    & $flutter test --exclude-tags benchmark
+    if ($LASTEXITCODE -ne 0) { $failures.Add('Flutter functional tests failed') }
+    if ($RunBenchmarks) {
+        & $flutter test --tags benchmark
+        if ($LASTEXITCODE -ne 0) { $failures.Add('Flutter benchmark tests failed') }
+    }
     Pop-Location
 
     docker compose run --rm --no-deps visual-processor pytest -q
