@@ -54,6 +54,8 @@ public interface IContentGenerationService
     Task<GenerationBatchStatusDto> GetGenerationBatchAsync(Guid batchId, CancellationToken ct);
     Task<GenerationBatchStatusDto> RetryGenerationBatchAsync(Guid userId, Guid batchId, CancellationToken ct);
     Task<GenerationBatchStatusDto> CancelGenerationBatchAsync(Guid userId, Guid batchId, CancellationToken ct);
+    Task<GenerationBatchStatusDto> SubmitGenerationBatchForReviewAsync(Guid userId, Guid batchId, EditorialTransitionRequest request, CancellationToken ct);
+    Task<GenerationBatchStatusDto> ApproveGenerationBatchAsync(Guid userId, Guid batchId, EditorialTransitionRequest request, CancellationToken ct);
     Task<IReadOnlyCollection<GenerationJobDto>> GetGenerationJobsAsync(int take, CancellationToken ct);
     Task<GenerationArtifactDto?> GetGenerationArtifactAsync(Guid jobId, string artifactKind, CancellationToken ct);
     Task<IReadOnlyCollection<RegionAdjustmentDto>> GetGenerationAdjustmentsAsync(Guid jobId, CancellationToken ct);

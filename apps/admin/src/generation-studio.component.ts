@@ -96,8 +96,11 @@ type RegionAdjustment = {
       <div class="toolbar compact">
         <button class="secondary" (click)="refreshBatch()">Refresh</button>
         <button class="secondary" (click)="retryBatch()" [disabled]="batch.failedCount === 0">Retry failed</button>
+        <button class="secondary" (click)="batchEditorialTransition('submit-review')" [disabled]="!canSubmitBatchForReview() || transitioning()">Send batch to review</button>
+        <button class="secondary" (click)="batchEditorialTransition('approve')" [disabled]="!canApproveBatch() || transitioning()">Approve batch</button>
         <button class="danger" (click)="cancelBatch()" [disabled]="batch.queuedCount === 0">Cancel pending</button>
       </div>
+      <label>Batch editorial note<input [(ngModel)]="batchEditorialNote" placeholder="Optional note for review/approval"></label>
       <div class="preset-card">
         <strong>Publish approved batch</strong>
         <span>All jobs must be approved. Titles are derived from the original source file names.</span>
@@ -200,6 +203,7 @@ export class GenerationStudioComponent {
   publishCountryCode = '';
   publishTitlePrefix = '';
   publishDescription = '';
+  batchEditorialNote = '';
   difficulty = 2;
   readonly difficulties = [
     { label: 'Kids', value: 0 }, { label: 'Easy', value: 1 },
@@ -299,6 +303,49 @@ export class GenerationStudioComponent {
       next: updated => { this.selectedBatch.set(updated); this.scheduleBatchPolling(updated); this.reloadJobs(); },
       error: () => this.error.set('Pending batch jobs could not be cancelled.')
     });
+  }
+
+  canSubmitBatchForReview() {
+    const batch = this.selectedBatch();
+    return !!batch
+      && batch.jobs.length > 0
+      && batch.jobs.some(job => this.isStatus(job.status, 3, 'PreviewReady') || this.isStatus(job.status, 3, 'Preview ready'))
+      && batch.jobs.every(job =>
+        this.isStatus(job.status, 3, 'PreviewReady')
+        || this.isStatus(job.status, 3, 'Preview ready')
+        || this.isStatus(job.status, 4, 'NeedsReview')
+        || this.isStatus(job.status, 5, 'Approved'));
+  }
+
+  canApproveBatch() {
+    const batch = this.selectedBatch();
+    return !!batch
+      && batch.jobs.length > 0
+      && batch.jobs.some(job => this.isStatus(job.status, 4, 'NeedsReview'))
+      && batch.jobs.every(job =>
+        this.isStatus(job.status, 4, 'NeedsReview')
+        || this.isStatus(job.status, 5, 'Approved'));
+  }
+
+  batchEditorialTransition(action: 'submit-review' | 'approve') {
+    const batch = this.selectedBatch();
+    if (!batch) return;
+    this.transitioning.set(true);
+    this.error.set('');
+    this.http.post<GenerationBatch>(
+      `${apiBase}/admin/content-generation/jobs/batch/${batch.batchId}/${action}`,
+      { note: this.batchEditorialNote.trim() || null }).subscribe({
+        next: updated => {
+          this.selectedBatch.set(updated);
+          this.transitioning.set(false);
+          this.batchEditorialNote = '';
+          this.reloadJobs();
+        },
+        error: () => {
+          this.transitioning.set(false);
+          this.error.set('Batch editorial transition failed.');
+        }
+      });
   }
 
   canPublishBatch() {

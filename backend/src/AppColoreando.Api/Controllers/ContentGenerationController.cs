@@ -52,6 +52,15 @@ public sealed class ContentGenerationController(IContentGenerationService servic
     [HttpPost("jobs/batch/{batchId:guid}/cancel")]
     public async Task<IActionResult> CancelBatch(Guid batchId, CancellationToken ct) =>
         Ok(await service.CancelGenerationBatchAsync(UserId(), batchId, ct));
+
+    [HttpPost("jobs/batch/{batchId:guid}/submit-review")]
+    public async Task<IActionResult> SubmitBatchForReview(Guid batchId, EditorialTransitionRequest request, CancellationToken ct) =>
+        Ok(await service.SubmitGenerationBatchForReviewAsync(UserId(), batchId, request, ct));
+
+    [HttpPost("jobs/batch/{batchId:guid}/approve")]
+    public async Task<IActionResult> ApproveBatch(Guid batchId, EditorialTransitionRequest request, CancellationToken ct) =>
+        Ok(await service.ApproveGenerationBatchAsync(UserId(), batchId, request, ct));
+
     [HttpGet("jobs")]
     public async Task<IActionResult> GetJobs(CancellationToken ct, [FromQuery] int take = 50) =>
         Ok(await service.GetGenerationJobsAsync(take, ct));

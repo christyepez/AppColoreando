@@ -274,3 +274,12 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Admin Generation Studio loads active categories/countries and exposes a guarded "Publish approved batch" action with optional country, title prefix and shared description.
 - Validation on MarketingIndo: Angular production build PASS; .NET Release build 0 warnings/0 errors; backend 42/42 tests PASS.
 - Validation on trabajo: backend 42/42 tests PASS; Admin Angular build PASS inside Docker; rebuilt API/worker healthy; protected batch publish route confirmed active with HTTP 401 without credentials.
+
+
+## S59 — Batch Editorial Workflow — Complete
+- Added authenticated batch editorial endpoints: `POST /api/admin/content-generation/jobs/batch/{batchId}/submit-review` and `POST /api/admin/content-generation/jobs/batch/{batchId}/approve`.
+- Batch submit-to-review is guarded: every job must already be PreviewReady, NeedsReview or Approved; active/failed/cancelled jobs reject the whole transition before any status changes.
+- Batch approval is guarded: every job must be NeedsReview or already Approved; eligible jobs transition together with per-job and batch-level audit records.
+- Admin Generation Studio now exposes "Send batch to review" and "Approve batch" actions with state-aware enablement and a shared editorial note.
+- Validation on MarketingIndo: .NET Release build 0 warnings/0 errors; backend 45/45 tests PASS; Angular production build PASS.
+- Validation on trabajo: backend 45/45 tests PASS; .NET Release build 0 warnings/0 errors after sequential rerun; Admin Angular build PASS in Docker; rebuilt API healthy; submit-review and approve routes confirmed active/protected with HTTP 401 without credentials.

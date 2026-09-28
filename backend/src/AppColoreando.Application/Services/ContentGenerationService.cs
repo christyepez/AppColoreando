@@ -207,6 +207,82 @@ public sealed class ContentGenerationService(
         return MapBatch(batchId, items);
     }
 
+    public async Task<GenerationBatchStatusDto> SubmitGenerationBatchForReviewAsync(
+        Guid userId,
+        Guid batchId,
+        EditorialTransitionRequest request,
+        CancellationToken ct)
+    {
+        var items = await jobs.ListByBatchAsync(batchId, ct);
+        if (items.Count == 0) throw new KeyNotFoundException("Generation batch not found.");
+        if (items.Any(x => x.Status is not (GenerationJobStatus.PreviewReady or GenerationJobStatus.NeedsReview or GenerationJobStatus.Approved)))
+            throw new InvalidOperationException("All batch jobs must be preview-ready, in review, or approved before batch review.");
+
+        var transitioned = 0;
+        foreach (var job in items.Where(x => x.Status == GenerationJobStatus.PreviewReady))
+        {
+            job.Status = GenerationJobStatus.NeedsReview;
+            transitioned++;
+            audit.Add(new AuditLog
+            {
+                UserId = userId,
+                EntityName = nameof(ArtworkGenerationJob),
+                EntityId = job.Id.ToString(),
+                Action = "GenerationSubmittedForReview",
+                ChangesJson = System.Text.Json.JsonSerializer.Serialize(new { request.Note, batchId })
+            });
+        }
+
+        audit.Add(new AuditLog
+        {
+            UserId = userId,
+            EntityName = "GenerationBatch",
+            EntityId = batchId.ToString(),
+            Action = "GenerationBatchSubmittedForReview",
+            ChangesJson = System.Text.Json.JsonSerializer.Serialize(new { request.Note, transitioned })
+        });
+        await uow.SaveChangesAsync(ct);
+        return MapBatch(batchId, items);
+    }
+
+    public async Task<GenerationBatchStatusDto> ApproveGenerationBatchAsync(
+        Guid userId,
+        Guid batchId,
+        EditorialTransitionRequest request,
+        CancellationToken ct)
+    {
+        var items = await jobs.ListByBatchAsync(batchId, ct);
+        if (items.Count == 0) throw new KeyNotFoundException("Generation batch not found.");
+        if (items.Any(x => x.Status is not (GenerationJobStatus.NeedsReview or GenerationJobStatus.Approved)))
+            throw new InvalidOperationException("All batch jobs must be in review or already approved before batch approval.");
+
+        var transitioned = 0;
+        foreach (var job in items.Where(x => x.Status == GenerationJobStatus.NeedsReview))
+        {
+            job.Status = GenerationJobStatus.Approved;
+            transitioned++;
+            audit.Add(new AuditLog
+            {
+                UserId = userId,
+                EntityName = nameof(ArtworkGenerationJob),
+                EntityId = job.Id.ToString(),
+                Action = "GenerationApproved",
+                ChangesJson = System.Text.Json.JsonSerializer.Serialize(new { request.Note, batchId })
+            });
+        }
+
+        audit.Add(new AuditLog
+        {
+            UserId = userId,
+            EntityName = "GenerationBatch",
+            EntityId = batchId.ToString(),
+            Action = "GenerationBatchApproved",
+            ChangesJson = System.Text.Json.JsonSerializer.Serialize(new { request.Note, transitioned })
+        });
+        await uow.SaveChangesAsync(ct);
+        return MapBatch(batchId, items);
+    }
+
     private static GenerationBatchStatusDto MapBatch(Guid batchId, IReadOnlyCollection<ArtworkGenerationJob> items)
     {
         var total = items.Count;
