@@ -12,6 +12,8 @@ type StylePreset = {
   id: string; name: string; code: string; targetRegionCount: number;
   maxColors: number; isActive: boolean;
 };
+type Category = { id: string; name: string; slug: string; isActive: boolean };
+type Country = { id: string; code: string; name: string; isActive: boolean };
 type GenerationJob = {
   id: string; sourceAssetId: string; stylePresetId: string;
   difficulty: number | string; status: number | string;
@@ -25,6 +27,9 @@ type GenerationBatch = {
   batchId: string; totalCount: number; queuedCount: number; runningCount: number;
   readyCount: number; failedCount: number; cancelledCount: number;
   completedCount: number; progressPercent: number; jobs: GenerationJob[];
+};
+type GenerationBatchPublication = {
+  batchId: string; publishedCount: number; artworks: { id: string; title: string }[];
 };
 
 type ArtifactKind = 'catalog' | 'lineart' | 'special';
@@ -93,6 +98,28 @@ type RegionAdjustment = {
         <button class="secondary" (click)="retryBatch()" [disabled]="batch.failedCount === 0">Retry failed</button>
         <button class="danger" (click)="cancelBatch()" [disabled]="batch.queuedCount === 0">Cancel pending</button>
       </div>
+      <div class="preset-card">
+        <strong>Publish approved batch</strong>
+        <span>All jobs must be approved. Titles are derived from the original source file names.</span>
+        <label>Category
+          <select [(ngModel)]="publishCategoryId">
+            <option value="">Select category</option>
+            <option *ngFor="let category of categories()" [value]="category.id">{{category.name}}</option>
+          </select>
+        </label>
+        <label>Country
+          <select [(ngModel)]="publishCountryCode">
+            <option value="">Global / none</option>
+            <option *ngFor="let country of countries()" [value]="country.code">{{country.name}}</option>
+          </select>
+        </label>
+        <label>Title prefix<input [(ngModel)]="publishTitlePrefix" placeholder="Optional, e.g. Andes"></label>
+        <label>Description<textarea [(ngModel)]="publishDescription" rows="2" placeholder="Optional description shared by the batch"></textarea></label>
+        <button (click)="publishBatch()" [disabled]="!canPublishBatch() || batchPublishing()">
+          {{batchPublishing() ? 'Publishing batch…' : 'Publish approved batch'}}
+        </button>
+        <span *ngIf="batchPublishMessage()" class="status-pill">{{batchPublishMessage()}}</span>
+      </div>
       <table>
         <tr><th>Source</th><th>Difficulty</th><th>Status</th><th></th></tr>
         <tr *ngFor="let job of batch.jobs">
@@ -140,10 +167,14 @@ export class GenerationStudioComponent {
   private readonly http = inject(HttpClient);
   readonly assets = signal<SourceAsset[]>([]);
   readonly presets = signal<StylePreset[]>([]);
+  readonly categories = signal<Category[]>([]);
+  readonly countries = signal<Country[]>([]);
   readonly jobs = signal<GenerationJob[]>([]);
   readonly selectedJob = signal<GenerationJob | null>(null);
   readonly selectedBatch = signal<GenerationBatch | null>(null);
   readonly batchCreating = signal(false);
+  readonly batchPublishing = signal(false);
+  readonly batchPublishMessage = signal('');
   readonly previewUrls = signal<Record<ArtifactKind, string>>({ catalog: '', lineart: '', special: '' });
   readonly regions = signal<GeneratedRegion[]>([]);
   readonly palette = signal<{ id: number; hex: string; name: string }[]>([]);
@@ -165,6 +196,10 @@ export class GenerationStudioComponent {
   selectedAssetId = '';
   selectedBatchAssetIds: string[] = [];
   selectedPresetId = '';
+  publishCategoryId = '';
+  publishCountryCode = '';
+  publishTitlePrefix = '';
+  publishDescription = '';
   difficulty = 2;
   readonly difficulties = [
     { label: 'Kids', value: 0 }, { label: 'Easy', value: 1 },
@@ -266,6 +301,41 @@ export class GenerationStudioComponent {
     });
   }
 
+  canPublishBatch() {
+    const batch = this.selectedBatch();
+    return !!batch
+      && !!this.publishCategoryId
+      && batch.jobs.length > 0
+      && batch.jobs.every(job => this.isStatus(job.status, 5, 'Approved'));
+  }
+
+  publishBatch() {
+    const batch = this.selectedBatch();
+    if (!batch || !this.canPublishBatch()) return;
+    this.batchPublishing.set(true);
+    this.batchPublishMessage.set('');
+    this.error.set('');
+    this.http.post<GenerationBatchPublication>(
+      `${apiBase}/admin/content-generation/jobs/batch/${batch.batchId}/publish`,
+      {
+        categoryId: this.publishCategoryId,
+        countryCode: this.publishCountryCode || null,
+        titlePrefix: this.publishTitlePrefix.trim() || null,
+        description: this.publishDescription.trim() || null
+      }).subscribe({
+        next: result => {
+          this.batchPublishing.set(false);
+          this.batchPublishMessage.set(`${result.publishedCount} artworks published`);
+          this.loadBatch(batch.batchId);
+          this.reloadJobs();
+        },
+        error: () => {
+          this.batchPublishing.set(false);
+          this.error.set('Approved batch could not be published.');
+        }
+      });
+  }
+
   private loadBatch(batchId: string) {
     this.http.get<GenerationBatch>(`${apiBase}/admin/content-generation/jobs/batch/${batchId}`).subscribe({
       next: batch => { this.selectedBatch.set(batch); this.scheduleBatchPolling(batch); },
@@ -286,6 +356,13 @@ export class GenerationStudioComponent {
       this.presets.set(x.filter(p => p.isActive));
       if (!this.selectedPresetId && x.length) this.selectedPresetId = x[0].id;
     });
+    this.http.get<Category[]>(`${apiBase}/catalog/categories`).subscribe(x => {
+      const active = x.filter(category => category.isActive);
+      this.categories.set(active);
+      if (!this.publishCategoryId && active.length) this.publishCategoryId = active[0].id;
+    });
+    this.http.get<Country[]>(`${apiBase}/catalog/countries`).subscribe(x =>
+      this.countries.set(x.filter(country => country.isActive)));
     this.reloadJobs();
   }
 

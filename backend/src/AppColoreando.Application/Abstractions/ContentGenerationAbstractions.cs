@@ -98,4 +98,9 @@ public interface IGenerationPublishingService
         Guid jobId,
         PublishGenerationRequest request,
         CancellationToken ct);
+    Task<GenerationBatchPublicationDto> PublishBatchAsync(
+        Guid userId,
+        Guid batchId,
+        PublishGenerationBatchRequest request,
+        CancellationToken ct);
 }

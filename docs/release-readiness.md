@@ -46,3 +46,5 @@ Remaining external blockers:
 Create `.env` from `.env.example` and use strong local values. Production values belong in the target secret store/CI environment, never Git.
 
 Required runtime secrets include PostgreSQL password, JWT signing key, RabbitMQ password, MinIO credentials and any opt-in seed administrator password.
+
+- Batch publishing: authenticated `POST /api/admin/content-generation/jobs/batch/{batchId}/publish`; all jobs must be Approved before publication.

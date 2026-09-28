@@ -100,5 +100,9 @@ public sealed class ContentGenerationController(IContentGenerationService servic
     public async Task<IActionResult> Publish(Guid id, PublishGenerationRequest request, CancellationToken ct) =>
         Ok(await publishing.PublishAsync(UserId(), id, request, ct));
 
+    [HttpPost("jobs/batch/{batchId:guid}/publish")]
+    public async Task<IActionResult> PublishBatch(Guid batchId, PublishGenerationBatchRequest request, CancellationToken ct) =>
+        Ok(await publishing.PublishBatchAsync(UserId(), batchId, request, ct));
+
     private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 }

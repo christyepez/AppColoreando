@@ -76,6 +76,17 @@ public sealed record PublishGenerationRequest(
     string? CountryCode,
     string? Description = null);
 
+public sealed record PublishGenerationBatchRequest(
+    Guid CategoryId,
+    string? CountryCode,
+    string? TitlePrefix = null,
+    string? Description = null);
+
+public sealed record GenerationBatchPublicationDto(
+    Guid BatchId,
+    int PublishedCount,
+    IReadOnlyCollection<ArtworkDto> Artworks);
+
 public sealed record GenerationPublicationAssets(
     string BundlePath,
     string ThumbnailPath,

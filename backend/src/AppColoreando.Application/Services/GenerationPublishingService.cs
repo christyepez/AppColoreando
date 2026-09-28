@@ -6,6 +6,7 @@ namespace AppColoreando.Application.Services;
 
 public sealed class GenerationPublishingService(
     IGenerationJobRepository jobs,
+    ISourceAssetRepository sourceAssets,
     IGenerationAdjustmentStore adjustments,
     IGenerationPublicationStore publication,
     IArtworkRepository artworks,
@@ -24,36 +25,126 @@ public sealed class GenerationPublishingService(
 
         var job = await jobs.GetAsync(jobId, ct)
             ?? throw new KeyNotFoundException("Generation job not found.");
-        if (string.IsNullOrWhiteSpace(job.ResultManifestPath))
-            throw new InvalidOperationException("Generation result is not ready.");
-        var category = await categories.GetAsync(request.CategoryId, ct)
+        EnsureApproved(job);
+
+        var category = await GetActiveCategoryAsync(request.CategoryId, ct);
+        var artwork = await MaterializeArtworkAsync(
+            userId,
+            job,
+            request.Title.Trim(),
+            category.Id,
+            request.CountryCode,
+            request.Description,
+            ct);
+
+        await uow.SaveChangesAsync(ct);
+        return Map(artwork);
+    }
+
+    public async Task<GenerationBatchPublicationDto> PublishBatchAsync(
+        Guid userId,
+        Guid batchId,
+        PublishGenerationBatchRequest request,
+        CancellationToken ct)
+    {
+        var batchJobs = (await jobs.ListByBatchAsync(batchId, ct))
+            .OrderBy(x => x.CreatedAtUtc)
+            .ThenBy(x => x.Id)
+            .ToArray();
+
+        if (batchJobs.Length == 0)
+            throw new KeyNotFoundException("Generation batch not found.");
+
+        var category = await GetActiveCategoryAsync(request.CategoryId, ct);
+
+        foreach (var job in batchJobs)
+            EnsureApproved(job);
+
+        var assetsById = new Dictionary<Guid, SourceAsset>();
+        foreach (var sourceAssetId in batchJobs.Select(x => x.SourceAssetId).Distinct())
+        {
+            var asset = await sourceAssets.GetAsync(sourceAssetId, ct)
+                ?? throw new KeyNotFoundException($"Source asset not found: {sourceAssetId}.");
+            assetsById[sourceAssetId] = asset;
+        }
+
+        var published = new List<Artwork>(batchJobs.Length);
+        foreach (var job in batchJobs)
+        {
+            ct.ThrowIfCancellationRequested();
+            var asset = assetsById[job.SourceAssetId];
+            var title = BuildBatchTitle(request.TitlePrefix, asset.FileName);
+            published.Add(await MaterializeArtworkAsync(
+                userId,
+                job,
+                title,
+                category.Id,
+                request.CountryCode,
+                request.Description,
+                ct));
+        }
+
+        audit.Add(new AuditLog
+        {
+            UserId = userId,
+            EntityName = nameof(ArtworkGenerationJob),
+            EntityId = batchId.ToString(),
+            Action = "GenerationBatchPublished",
+            ChangesJson = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                batchId,
+                count = published.Count,
+                artworkIds = published.Select(x => x.Id).ToArray()
+            })
+        });
+
+        await uow.SaveChangesAsync(ct);
+
+        return new GenerationBatchPublicationDto(
+            batchId,
+            published.Count,
+            published.Select(Map).ToArray());
+    }
+
+    private async Task<Category> GetActiveCategoryAsync(Guid categoryId, CancellationToken ct)
+    {
+        var category = await categories.GetAsync(categoryId, ct)
             ?? throw new KeyNotFoundException("Category not found.");
         if (!category.IsActive)
             throw new InvalidOperationException("Category is inactive.");
+        return category;
+    }
 
-        if (job.Status is GenerationJobStatus.Failed or GenerationJobStatus.Pending or GenerationJobStatus.Queued or GenerationJobStatus.Running)
-            throw new InvalidOperationException("Generation job is not publishable yet.");
-
+    private async Task<Artwork> MaterializeArtworkAsync(
+        Guid userId,
+        ArtworkGenerationJob job,
+        string title,
+        Guid categoryId,
+        string? countryCode,
+        string? description,
+        CancellationToken ct)
+    {
+        var overlay = await adjustments.ListAsync(job.ResultManifestPath!, ct);
         var artworkId = Guid.NewGuid();
-        var overlay = await adjustments.ListAsync(job.ResultManifestPath, ct);
-        var published = await publication.MaterializeAsync(
-            artworkId, job.ResultManifestPath, overlay, ct)
+        var materialized = await publication.MaterializeAsync(
+            artworkId, job.ResultManifestPath!, overlay, ct)
             ?? throw new InvalidOperationException("Generation bundle could not be materialized.");
+
         var bundleUrl = $"/api/catalog/artworks/{artworkId}/bundle";
         var thumbnailUrl = $"/api/catalog/artworks/{artworkId}/thumbnail";
         var artwork = new Artwork
         {
             Id = artworkId,
-            Title = request.Title.Trim(),
-            Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
-            CategoryId = request.CategoryId,
-            CountryCode = string.IsNullOrWhiteSpace(request.CountryCode) ? null : request.CountryCode.Trim().ToUpperInvariant(),
+            Title = title,
+            Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
+            CategoryId = categoryId,
+            CountryCode = string.IsNullOrWhiteSpace(countryCode) ? null : countryCode.Trim().ToUpperInvariant(),
             LicenseType = "Original",
             ThumbnailUrl = thumbnailUrl,
             AssetUrl = bundleUrl,
-            BundleChecksum = published.Checksum,
+            BundleChecksum = materialized.Checksum,
             Difficulty = (int)job.Difficulty + 1,
-            RegionCount = published.RegionCount,
+            RegionCount = materialized.RegionCount,
             PublishingStatus = PublishingStatus.Published,
             PublishedAtUtc = DateTime.UtcNow
         };
@@ -62,8 +153,8 @@ public sealed class GenerationPublishingService(
             Kind = ArtworkAssetKind.BundleJson,
             Uri = bundleUrl,
             ContentType = "application/json",
-            Checksum = published.Checksum,
-            SizeBytes = new FileInfo(published.BundlePath).Length,
+            Checksum = materialized.Checksum,
+            SizeBytes = new FileInfo(materialized.BundlePath).Length,
             IsPrimary = true
         });
         artwork.Assets.Add(new ArtworkAsset
@@ -71,9 +162,10 @@ public sealed class GenerationPublishingService(
             Kind = ArtworkAssetKind.Thumbnail,
             Uri = thumbnailUrl,
             ContentType = "image/webp",
-            SizeBytes = new FileInfo(published.ThumbnailPath).Length,
+            SizeBytes = new FileInfo(materialized.ThumbnailPath).Length,
             IsPrimary = true
         });
+
         await artworks.AddAsync(artwork, ct);
         job.Status = GenerationJobStatus.Published;
         audit.Add(new AuditLog
@@ -84,9 +176,31 @@ public sealed class GenerationPublishingService(
             Action = "GenerationPublished",
             ChangesJson = System.Text.Json.JsonSerializer.Serialize(new { artworkId })
         });
-        await uow.SaveChangesAsync(ct);
 
-        return Map(artwork);
+        return artwork;
+    }
+
+    private static void EnsureApproved(ArtworkGenerationJob job)
+    {
+        if (job.Status != GenerationJobStatus.Approved)
+            throw new InvalidOperationException("Generation job must be approved before publication.");
+        if (string.IsNullOrWhiteSpace(job.ResultManifestPath))
+            throw new InvalidOperationException("Generation result is not ready.");
+    }
+
+    private static string BuildBatchTitle(string? prefix, string fileName)
+    {
+        var stem = Path.GetFileNameWithoutExtension(fileName)
+            .Replace('-', ' ')
+            .Replace('_', ' ')
+            .Trim();
+        stem = string.Join(' ', stem.Split(' ', StringSplitOptions.RemoveEmptyEntries));
+        if (string.IsNullOrWhiteSpace(stem))
+            stem = "Artwork";
+
+        return string.IsNullOrWhiteSpace(prefix)
+            ? stem
+            : $"{prefix.Trim()} {stem}";
     }
 
     private static ArtworkDto Map(Artwork x) => new(

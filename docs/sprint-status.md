@@ -264,3 +264,13 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Single-job and batch flows reuse the same validated asset/preset rules while batch processing avoids repeated preset lookups.
 - Added regression coverage proving a later rejected asset leaves both the job repository and queue empty.
 - Validation: Application tests 24/24 PASS; full backend solution 39/39 PASS; Release build 0 warnings/0 errors.
+
+
+## S58 — Batch Approval & Publication Foundation — Complete
+- Batch creation now validates the active preset and every source asset before creating or queueing the first job, preventing partial batches and orphaned RabbitMQ messages.
+- Added batch publication contract and authenticated endpoint: `POST /api/admin/content-generation/jobs/batch/{batchId}/publish`.
+- Publication now enforces the editorial workflow: jobs must be explicitly `Approved` before individual or batch publication.
+- Batch publication prevalidates every job, category and source asset before materialization, derives artwork titles from source file names with an optional prefix, publishes all artworks and commits database changes once at the end.
+- Admin Generation Studio loads active categories/countries and exposes a guarded "Publish approved batch" action with optional country, title prefix and shared description.
+- Validation on MarketingIndo: Angular production build PASS; .NET Release build 0 warnings/0 errors; backend 42/42 tests PASS.
+- Validation on trabajo: backend 42/42 tests PASS; Admin Angular build PASS inside Docker; rebuilt API/worker healthy; protected batch publish route confirmed active with HTTP 401 without credentials.
