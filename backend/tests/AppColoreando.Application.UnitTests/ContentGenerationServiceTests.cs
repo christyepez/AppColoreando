@@ -58,7 +58,8 @@ public sealed class ContentGenerationServiceTests
         var second = new SourceAsset { Id = Guid.NewGuid(), Status = SourceAssetStatus.Validated };
         var preset = new StylePreset { Id = Guid.NewGuid(), Code = "natural", IsActive = true };
         var jobs = new FakeJobRepository();
-        var sut = CreateService(new FakeAssetRepository(first, second), new FakePresetRepository(preset), jobs);
+        var queue = new FakeQueue();
+        var sut = CreateService(new FakeAssetRepository(first, second), new FakePresetRepository(preset), jobs, queue: queue);
 
         var result = await sut.CreateGenerationBatchAsync(Guid.NewGuid(),
             new CreateGenerationBatchRequest([first.Id, second.Id, first.Id], preset.Id),
@@ -68,6 +69,9 @@ public sealed class ContentGenerationServiceTests
         Assert.Equal(2, result.QueuedCount);
         Assert.Equal(2, result.Jobs.Count);
         Assert.Equal(2, jobs.Items.Count);
+        Assert.All(jobs.Items, job => Assert.Equal(result.BatchId, job.BatchId));
+        Assert.Equal(2, queue.EnqueuedJobIds.Count);
+        Assert.Equal(jobs.Items.Select(x => x.Id).Order(), queue.EnqueuedJobIds.Order());
     }
 
     [Fact]
@@ -201,7 +205,14 @@ public sealed class ContentGenerationServiceTests
     private sealed class FakeQueue : IGenerationJobQueue
     {
         public Guid? LastJobId { get; private set; }
-        public Task EnqueueAsync(Guid jobId, CancellationToken ct) { LastJobId = jobId; return Task.CompletedTask; }
+        public List<Guid> EnqueuedJobIds { get; } = [];
+
+        public Task EnqueueAsync(Guid jobId, CancellationToken ct)
+        {
+            LastJobId = jobId;
+            EnqueuedJobIds.Add(jobId);
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeAuditRepository : IAuditRepository

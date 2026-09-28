@@ -238,3 +238,12 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - The themed acceptance gate validates target-region metadata, spatial-region density, palette bounds, playable coverage, QA score, absence of Error-severity issues and generated SVG/WebP artifacts.
 - Validation on trabajo: Docker/HTTP preflight PASS; .NET Release build 0 warnings/0 errors; backend 38/38 tests PASS; Flutter analyze PASS; Flutter functional suite 25/25 PASS; Visual Processor 30/30 tests PASS; PRECHECK PASSED.
 - Performance benchmark is tagged separately so workstation load does not create false functional failures. MarketingIndo validates the 2,500-region / 150-color CustomPainter benchmark independently: 1/1 PASS in ~1 s; full Flutter suite 26/26 PASS.
+
+
+## S56 — Batch Content Factory — Complete
+- Fixed a batch identity bug where CreateGenerationBatchAsync created a batchId but queued jobs with BatchId=null.
+- Generation jobs now receive their BatchId before the first SaveChanges and before RabbitMQ enqueue, eliminating the tracking/race window.
+- Single-job creation and batch creation share one internal creation path so validation, audit, persistence and queue behavior remain consistent.
+- Batch unit coverage now asserts asset de-duplication, common BatchId propagation and one queue message per generated job.
+- Existing batch status, retry and cancel endpoints now operate over jobs that are actually addressable by their batch id.
+- Validation: .NET Release build 0 warnings/0 errors; Application tests 23/23 PASS; full backend solution 38/38 PASS.
