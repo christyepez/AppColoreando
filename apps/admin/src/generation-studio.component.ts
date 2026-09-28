@@ -18,6 +18,14 @@ type GenerationJob = {
   errorCode?: string; errorMessage?: string; resultManifestPath?: string;
   createdAtUtc: string; startedAtUtc?: string; completedAtUtc?: string;
 };
+type GenerationBatchCreated = {
+  batchId: string; requestedCount: number; queuedCount: number; jobs: GenerationJob[];
+};
+type GenerationBatch = {
+  batchId: string; totalCount: number; queuedCount: number; runningCount: number;
+  readyCount: number; failedCount: number; cancelledCount: number;
+  completedCount: number; progressPercent: number; jobs: GenerationJob[];
+};
 
 type ArtifactKind = 'catalog' | 'lineart' | 'special';
 type GeneratedRegion = {
@@ -51,8 +59,49 @@ type RegionAdjustment = {
         <label>Difficulty<select [(ngModel)]="difficulty"><option *ngFor="let option of difficulties" [ngValue]="option.value">{{option.label}}</option></select></label>
         <div class="preset-card" *ngIf="selectedPreset() as preset"><strong>{{preset.name}}</strong><span>{{preset.maxColors}} colors · {{preset.targetRegionCount}} target regions</span><span class="effect-chip" *ngIf="isSpecial(preset.code)">{{effectName(preset.code)}}</span></div>
         <button (click)="generate()" [disabled]="!canGenerate() || generating()">{{generating() ? 'Generating…' : 'Generate five variants'}}</button>
+        <div class="preset-card">
+          <strong>Batch factory</strong>
+          <span>Select up to 100 validated source assets and queue them with the same preset/difficulty.</span>
+          <label>Batch source assets
+            <select multiple size="7" [(ngModel)]="selectedBatchAssetIds">
+              <option *ngFor="let asset of assets()" [value]="asset.id">{{asset.fileName}}</option>
+            </select>
+          </label>
+          <button (click)="generateBatch()" [disabled]="!canGenerateBatch() || batchCreating()">
+            {{batchCreating() ? 'Queueing batch…' : ('Generate batch (' + selectedBatchAssetIds.length + ')')}}
+          </button>
+        </div>
         <p class="error" *ngIf="error()">{{error()}}</p>
       </article>
+    </section>
+
+    <section class="panel" *ngIf="selectedBatch() as batch">
+      <div class="section-title">
+        <div><span class="eyebrow">BATCH</span><h3>Content factory</h3></div>
+        <span class="status-pill">{{batch.progressPercent | number:'1.0-1'}}%</span>
+      </div>
+      <div class="tune-grid">
+        <div><strong>{{batch.totalCount}}</strong><small>Total</small></div>
+        <div><strong>{{batch.queuedCount}}</strong><small>Queued</small></div>
+        <div><strong>{{batch.runningCount}}</strong><small>Running</small></div>
+        <div><strong>{{batch.readyCount}}</strong><small>Ready</small></div>
+        <div><strong>{{batch.failedCount}}</strong><small>Failed</small></div>
+        <div><strong>{{batch.cancelledCount}}</strong><small>Cancelled</small></div>
+      </div>
+      <div class="toolbar compact">
+        <button class="secondary" (click)="refreshBatch()">Refresh</button>
+        <button class="secondary" (click)="retryBatch()" [disabled]="batch.failedCount === 0">Retry failed</button>
+        <button class="danger" (click)="cancelBatch()" [disabled]="batch.queuedCount === 0">Cancel pending</button>
+      </div>
+      <table>
+        <tr><th>Source</th><th>Difficulty</th><th>Status</th><th></th></tr>
+        <tr *ngFor="let job of batch.jobs">
+          <td>{{assetName(job.sourceAssetId)}}</td>
+          <td>{{difficultyName(job.difficulty)}}</td>
+          <td><span class="status-pill">{{statusName(job.status)}}</span></td>
+          <td><button class="secondary" (click)="openJob(job)">Open</button></td>
+        </tr>
+      </table>
     </section>
 
     <section class="panel" *ngIf="selectedJob() as job">
@@ -93,6 +142,8 @@ export class GenerationStudioComponent {
   readonly presets = signal<StylePreset[]>([]);
   readonly jobs = signal<GenerationJob[]>([]);
   readonly selectedJob = signal<GenerationJob | null>(null);
+  readonly selectedBatch = signal<GenerationBatch | null>(null);
+  readonly batchCreating = signal(false);
   readonly previewUrls = signal<Record<ArtifactKind, string>>({ catalog: '', lineart: '', special: '' });
   readonly regions = signal<GeneratedRegion[]>([]);
   readonly palette = signal<{ id: number; hex: string; name: string }[]>([]);
@@ -112,6 +163,7 @@ export class GenerationStudioComponent {
   readonly localPreview = signal('');
   selectedFile: File | null = null;
   selectedAssetId = '';
+  selectedBatchAssetIds: string[] = [];
   selectedPresetId = '';
   difficulty = 2;
   readonly difficulties = [
@@ -120,6 +172,7 @@ export class GenerationStudioComponent {
     { label: 'Master', value: 4 }
   ];
   private pollHandle?: ReturnType<typeof setTimeout>;
+  private batchPollHandle?: ReturnType<typeof setTimeout>;
 
   constructor() {
     this.reloadAll();
@@ -161,6 +214,72 @@ export class GenerationStudioComponent {
       error: () => { this.error.set('Generation job could not be queued.'); this.generating.set(false); }
     });
   }
+  generateBatch() {
+    if (!this.canGenerateBatch()) return;
+    this.batchCreating.set(true);
+    this.error.set('');
+    this.http.post<GenerationBatchCreated>(`${apiBase}/admin/content-generation/jobs/batch`, {
+      sourceAssetIds: this.selectedBatchAssetIds,
+      stylePresetId: this.selectedPresetId,
+      difficulty: this.difficulty
+    }).subscribe({
+      next: batch => {
+        this.batchCreating.set(false);
+        this.loadBatch(batch.batchId);
+        this.reloadJobs();
+      },
+      error: () => {
+        this.error.set('Generation batch could not be queued.');
+        this.batchCreating.set(false);
+      }
+    });
+  }
+
+  canGenerateBatch() {
+    return !!this.selectedPresetId
+      && this.selectedBatchAssetIds.length > 0
+      && this.selectedBatchAssetIds.length <= 100;
+  }
+
+  refreshBatch() {
+    const batch = this.selectedBatch();
+    if (batch) this.loadBatch(batch.batchId);
+  }
+
+  retryBatch() {
+    const batch = this.selectedBatch();
+    if (!batch || batch.failedCount === 0) return;
+    this.error.set('');
+    this.http.post<GenerationBatch>(`${apiBase}/admin/content-generation/jobs/batch/${batch.batchId}/retry`, {}).subscribe({
+      next: updated => { this.selectedBatch.set(updated); this.scheduleBatchPolling(updated); this.reloadJobs(); },
+      error: () => this.error.set('Failed batch jobs could not be retried.')
+    });
+  }
+
+  cancelBatch() {
+    const batch = this.selectedBatch();
+    if (!batch || batch.queuedCount === 0) return;
+    this.error.set('');
+    this.http.post<GenerationBatch>(`${apiBase}/admin/content-generation/jobs/batch/${batch.batchId}/cancel`, {}).subscribe({
+      next: updated => { this.selectedBatch.set(updated); this.scheduleBatchPolling(updated); this.reloadJobs(); },
+      error: () => this.error.set('Pending batch jobs could not be cancelled.')
+    });
+  }
+
+  private loadBatch(batchId: string) {
+    this.http.get<GenerationBatch>(`${apiBase}/admin/content-generation/jobs/batch/${batchId}`).subscribe({
+      next: batch => { this.selectedBatch.set(batch); this.scheduleBatchPolling(batch); },
+      error: () => this.error.set('Generation batch could not be loaded.')
+    });
+  }
+
+  private scheduleBatchPolling(batch: GenerationBatch) {
+    if (this.batchPollHandle) clearTimeout(this.batchPollHandle);
+    if (batch.queuedCount > 0 || batch.runningCount > 0) {
+      this.batchPollHandle = setTimeout(() => this.loadBatch(batch.batchId), 2500);
+    }
+  }
+
   reloadAll() {
     this.loadAssets();
     this.http.get<StylePreset[]>(`${apiBase}/admin/content-generation/style-presets`).subscribe(x => {
@@ -266,6 +385,7 @@ export class GenerationStudioComponent {
   }
   ngOnDestroy() {
     if (this.pollHandle) clearTimeout(this.pollHandle);
+    if (this.batchPollHandle) clearTimeout(this.batchPollHandle);
     this.clearPreviewUrls();
     this.revokeLocalPreview();
   }

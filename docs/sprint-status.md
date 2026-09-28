@@ -247,3 +247,12 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Batch unit coverage now asserts asset de-duplication, common BatchId propagation and one queue message per generated job.
 - Existing batch status, retry and cancel endpoints now operate over jobs that are actually addressable by their batch id.
 - Validation: .NET Release build 0 warnings/0 errors; Application tests 23/23 PASS; full backend solution 38/38 PASS.
+
+
+## S57 — Admin Batch Studio — Complete
+- Generation Studio now supports selecting multiple validated source assets and queuing up to 100 items with one preset/difficulty.
+- Added live batch dashboard with total, queued, running, ready, failed, cancelled and progress percentage.
+- Added batch refresh, retry-failed and cancel-pending controls using the existing batch API endpoints.
+- Batch jobs remain individually reviewable/openable so editorial approval and publication continue to be per artwork.
+- Batch polling is independent from single-job polling and is disposed with the component.
+- Validation: Angular production build PASS on MarketingIndo; batch API/backend remained at 38/38 tests PASS.
