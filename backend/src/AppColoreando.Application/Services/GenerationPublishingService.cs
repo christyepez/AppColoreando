@@ -11,6 +11,7 @@ public sealed class GenerationPublishingService(
     IGenerationPublicationStore publication,
     IArtworkRepository artworks,
     ICategoryRepository categories,
+    ICollectionRepository collections,
     IAuditRepository audit,
     IUnitOfWork uow) : IGenerationPublishingService
 {
@@ -56,6 +57,9 @@ public sealed class GenerationPublishingService(
             throw new KeyNotFoundException("Generation batch not found.");
 
         var category = await GetActiveCategoryAsync(request.CategoryId, ct);
+        var collection = request.CollectionId.HasValue
+            ? await GetActiveCollectionAsync(request.CollectionId.Value, ct)
+            : null;
 
         foreach (var job in batchJobs)
             EnsureApproved(job);
@@ -69,19 +73,37 @@ public sealed class GenerationPublishingService(
         }
 
         var published = new List<Artwork>(batchJobs.Length);
+        var nextSortOrder = collection?.Artworks.Count > 0
+            ? collection.Artworks.Max(x => x.SortOrder) + 1
+            : 0;
+        var effectiveCountryCode = string.IsNullOrWhiteSpace(request.CountryCode)
+            ? collection?.CountryCode
+            : request.CountryCode;
+
         foreach (var job in batchJobs)
         {
             ct.ThrowIfCancellationRequested();
             var asset = assetsById[job.SourceAssetId];
             var title = BuildBatchTitle(request.TitlePrefix, asset.FileName);
-            published.Add(await MaterializeArtworkAsync(
+            var artwork = await MaterializeArtworkAsync(
                 userId,
                 job,
                 title,
                 category.Id,
-                request.CountryCode,
+                effectiveCountryCode,
                 request.Description,
-                ct));
+                ct);
+            published.Add(artwork);
+
+            if (collection is not null)
+            {
+                collection.Artworks.Add(new CollectionArtwork
+                {
+                    CollectionId = collection.Id,
+                    ArtworkId = artwork.Id,
+                    SortOrder = nextSortOrder++
+                });
+            }
         }
 
         audit.Add(new AuditLog
@@ -94,6 +116,7 @@ public sealed class GenerationPublishingService(
             {
                 batchId,
                 count = published.Count,
+                collectionId = collection?.Id,
                 artworkIds = published.Select(x => x.Id).ToArray()
             })
         });
@@ -113,6 +136,15 @@ public sealed class GenerationPublishingService(
         if (!category.IsActive)
             throw new InvalidOperationException("Category is inactive.");
         return category;
+    }
+
+    private async Task<Collection> GetActiveCollectionAsync(Guid collectionId, CancellationToken ct)
+    {
+        var collection = await collections.GetAsync(collectionId, ct)
+            ?? throw new KeyNotFoundException("Collection not found.");
+        if (!collection.IsActive)
+            throw new InvalidOperationException("Collection is inactive.");
+        return collection;
     }
 
     private async Task<Artwork> MaterializeArtworkAsync(

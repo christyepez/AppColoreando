@@ -14,6 +14,10 @@ type StylePreset = {
 };
 type Category = { id: string; name: string; slug: string; isActive: boolean };
 type Country = { id: string; code: string; name: string; isActive: boolean };
+type Collection = {
+  id: string; name: string; slug: string; description?: string;
+  countryCode?: string; isActive: boolean; artworkCount: number;
+};
 type GenerationJob = {
   id: string; sourceAssetId: string; stylePresetId: string;
   difficulty: number | string; status: number | string;
@@ -112,8 +116,14 @@ type RegionAdjustment = {
         </label>
         <label>Country
           <select [(ngModel)]="publishCountryCode">
-            <option value="">Global / none</option>
+            <option value="">Use collection/default</option>
             <option *ngFor="let country of countries()" [value]="country.code">{{country.name}}</option>
+          </select>
+        </label>
+        <label>Collection
+          <select [(ngModel)]="publishCollectionId">
+            <option value="">No collection</option>
+            <option *ngFor="let collection of collections()" [value]="collection.id">{{collection.name}} · {{collection.artworkCount}} artworks</option>
           </select>
         </label>
         <label>Title prefix<input [(ngModel)]="publishTitlePrefix" placeholder="Optional, e.g. Andes"></label>
@@ -172,6 +182,7 @@ export class GenerationStudioComponent {
   readonly presets = signal<StylePreset[]>([]);
   readonly categories = signal<Category[]>([]);
   readonly countries = signal<Country[]>([]);
+  readonly collections = signal<Collection[]>([]);
   readonly jobs = signal<GenerationJob[]>([]);
   readonly selectedJob = signal<GenerationJob | null>(null);
   readonly selectedBatch = signal<GenerationBatch | null>(null);
@@ -201,6 +212,7 @@ export class GenerationStudioComponent {
   selectedPresetId = '';
   publishCategoryId = '';
   publishCountryCode = '';
+  publishCollectionId = '';
   publishTitlePrefix = '';
   publishDescription = '';
   batchEditorialNote = '';
@@ -367,6 +379,7 @@ export class GenerationStudioComponent {
       {
         categoryId: this.publishCategoryId,
         countryCode: this.publishCountryCode || null,
+        collectionId: this.publishCollectionId || null,
         titlePrefix: this.publishTitlePrefix.trim() || null,
         description: this.publishDescription.trim() || null
       }).subscribe({
@@ -410,6 +423,8 @@ export class GenerationStudioComponent {
     });
     this.http.get<Country[]>(`${apiBase}/catalog/countries`).subscribe(x =>
       this.countries.set(x.filter(country => country.isActive)));
+    this.http.get<Collection[]>(`${apiBase}/catalog/collections`).subscribe(x =>
+      this.collections.set(x.filter(collection => collection.isActive)));
     this.reloadJobs();
   }
 

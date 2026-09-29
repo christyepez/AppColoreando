@@ -80,7 +80,8 @@ public sealed record PublishGenerationBatchRequest(
     Guid CategoryId,
     string? CountryCode,
     string? TitlePrefix = null,
-    string? Description = null);
+    string? Description = null,
+    Guid? CollectionId = null);
 
 public sealed record GenerationBatchPublicationDto(
     Guid BatchId,

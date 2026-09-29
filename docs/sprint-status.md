@@ -283,3 +283,13 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Admin Generation Studio now exposes "Send batch to review" and "Approve batch" actions with state-aware enablement and a shared editorial note.
 - Validation on MarketingIndo: .NET Release build 0 warnings/0 errors; backend 45/45 tests PASS; Angular production build PASS.
 - Validation on trabajo: backend 45/45 tests PASS; .NET Release build 0 warnings/0 errors after sequential rerun; Admin Angular build PASS in Docker; rebuilt API healthy; submit-review and approve routes confirmed active/protected with HTTP 401 without credentials.
+
+
+## S60 — Batch Collection Publishing — Complete
+- Batch publication can now target an active collection in addition to category/country metadata.
+- The Admin Generation Studio loads active collections and exposes collection selection in the guarded batch publication flow.
+- Published artworks are appended to the selected collection with deterministic SortOrder continuation.
+- When CountryCode is omitted from the publish request, the selected collection CountryCode becomes the effective artwork country; an explicit request country still takes precedence.
+- Inactive or missing collections reject the whole batch before any artwork materialization, preserving all-or-nothing publication semantics.
+- Audit metadata records the selected collection id together with the published artwork ids.
+- Validation on MarketingIndo: .NET Release build 0 warnings/0 errors; backend 47/47 tests PASS; Angular production build PASS; git diff --check PASS.

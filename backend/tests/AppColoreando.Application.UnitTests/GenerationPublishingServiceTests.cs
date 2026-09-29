@@ -103,13 +103,103 @@ public sealed class GenerationPublishingServiceTests
         Assert.Equal(GenerationJobStatus.Published, second.Status);
     }
 
+    [Fact]
+    public async Task Publish_batch_assigns_collection_in_order_and_inherits_country()
+    {
+        var batchId = Guid.NewGuid();
+        var firstAsset = Asset("andes-one.png");
+        var secondAsset = Asset("andes-two.png");
+        var first = Job(GenerationJobStatus.Approved, firstAsset.Id, batchId);
+        var second = Job(GenerationJobStatus.Approved, secondAsset.Id, batchId);
+        var collection = ActiveCollection();
+        collection.Artworks.Add(new CollectionArtwork
+        {
+            CollectionId = collection.Id,
+            ArtworkId = Guid.NewGuid(),
+            SortOrder = 7
+        });
+        using var publication = new FakePublicationStore();
+        var artworkRepository = new FakeArtworkRepository();
+
+        var sut = CreateService(
+            jobs: new FakeJobRepository(first, second),
+            assets: new FakeSourceAssetRepository(firstAsset, secondAsset),
+            publication: publication,
+            artworks: artworkRepository,
+            categories: new FakeCategoryRepository(ActiveCategory()),
+            collections: new FakeCollectionRepository(collection));
+
+        var result = await sut.PublishBatchAsync(
+            Guid.NewGuid(),
+            batchId,
+            new PublishGenerationBatchRequest(
+                ActiveCategoryId,
+                null,
+                "Andes",
+                null,
+                collection.Id),
+            CancellationToken.None);
+
+        Assert.Equal(2, result.PublishedCount);
+        Assert.Equal(3, collection.Artworks.Count);
+        Assert.Equal([7, 8, 9], collection.Artworks.OrderBy(x => x.SortOrder).Select(x => x.SortOrder).ToArray());
+        Assert.Equal(
+            artworkRepository.Items.Select(x => x.Id).Order(),
+            collection.Artworks.Where(x => x.SortOrder >= 8).Select(x => x.ArtworkId).Order());
+        Assert.All(artworkRepository.Items, x => Assert.Equal("SA", x.CountryCode));
+    }
+
+    [Fact]
+    public async Task Publish_batch_rejects_inactive_collection_before_materializing()
+    {
+        var batchId = Guid.NewGuid();
+        var asset = Asset("comic-one.png");
+        var job = Job(GenerationJobStatus.Approved, asset.Id, batchId);
+        var inactive = ActiveCollection();
+        inactive.IsActive = false;
+        using var publication = new FakePublicationStore();
+        var artworkRepository = new FakeArtworkRepository();
+
+        var sut = CreateService(
+            jobs: new FakeJobRepository(job),
+            assets: new FakeSourceAssetRepository(asset),
+            publication: publication,
+            artworks: artworkRepository,
+            categories: new FakeCategoryRepository(ActiveCategory()),
+            collections: new FakeCollectionRepository(inactive));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            sut.PublishBatchAsync(
+                Guid.NewGuid(),
+                batchId,
+                new PublishGenerationBatchRequest(
+                    ActiveCategoryId,
+                    "EC",
+                    CollectionId: inactive.Id),
+                CancellationToken.None));
+
+        Assert.Equal(0, publication.MaterializeCalls);
+        Assert.Empty(artworkRepository.Items);
+        Assert.Equal(GenerationJobStatus.Approved, job.Status);
+    }
+
     private static readonly Guid ActiveCategoryId = Guid.Parse("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
+    private static readonly Guid ActiveCollectionId = Guid.Parse("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
 
     private static Category ActiveCategory() => new()
     {
         Id = ActiveCategoryId,
         Name = "Original",
         Slug = "original",
+        IsActive = true
+    };
+
+    private static Collection ActiveCollection() => new()
+    {
+        Id = ActiveCollectionId,
+        Name = "Andean Originals",
+        Slug = "andean-originals",
+        CountryCode = "SA",
         IsActive = true
     };
 
@@ -146,6 +236,7 @@ public sealed class GenerationPublishingServiceTests
         FakePublicationStore? publication = null,
         FakeArtworkRepository? artworks = null,
         FakeCategoryRepository? categories = null,
+        FakeCollectionRepository? collections = null,
         FakeUnitOfWork? uow = null) =>
         new(
             jobs ?? new(),
@@ -154,6 +245,7 @@ public sealed class GenerationPublishingServiceTests
             publication ?? new FakePublicationStore(),
             artworks ?? new(),
             categories ?? new FakeCategoryRepository(ActiveCategory()),
+            collections ?? new FakeCollectionRepository(),
             new FakeAuditRepository(),
             uow ?? new());
 
@@ -260,6 +352,16 @@ public sealed class GenerationPublishingServiceTests
             items.Add(category);
             return Task.CompletedTask;
         }
+    }
+
+    private sealed class FakeCollectionRepository(params Collection[] seed) : ICollectionRepository
+    {
+        private readonly List<Collection> items = [.. seed];
+        public Task<IReadOnlyCollection<CollectionDto>> ListAsync(CancellationToken ct) =>
+            Task.FromResult<IReadOnlyCollection<CollectionDto>>([]);
+        public Task<Collection?> GetAsync(Guid id, CancellationToken ct) =>
+            Task.FromResult(items.SingleOrDefault(x => x.Id == id));
+        public void Add(Collection collection) => items.Add(collection);
     }
 
     private sealed class FakeAuditRepository : IAuditRepository
