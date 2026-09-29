@@ -33,6 +33,8 @@ public interface IArtworkRepository
     Task<PageResult<ArtworkDto>> SearchAsync(CatalogQuery query, CancellationToken ct);
     Task AddAsync(Artwork artwork, CancellationToken ct);
     Task<int> CountPublishedAsync(CancellationToken ct);
+    Task<IReadOnlyCollection<Artwork>> ListDueScheduledAsync(DateTime utcNow, int take, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyCollection<Artwork>>([]);
 }
 
 public interface ICategoryRepository

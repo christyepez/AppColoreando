@@ -103,6 +103,79 @@ public sealed class GenerationPublishingServiceTests
         Assert.Equal(GenerationJobStatus.Published, second.Status);
     }
 
+
+    [Fact]
+    public async Task Publish_batch_can_schedule_future_publication()
+    {
+        var batchId = Guid.NewGuid();
+        var firstAsset = Asset("future-one.png");
+        var secondAsset = Asset("future-two.png");
+        var first = Job(GenerationJobStatus.Approved, firstAsset.Id, batchId);
+        var second = Job(GenerationJobStatus.Approved, secondAsset.Id, batchId);
+        var schedule = DateTime.UtcNow.AddHours(2);
+        using var publication = new FakePublicationStore();
+        var artworkRepository = new FakeArtworkRepository();
+
+        var sut = CreateService(
+            jobs: new FakeJobRepository(first, second),
+            assets: new FakeSourceAssetRepository(firstAsset, secondAsset),
+            publication: publication,
+            artworks: artworkRepository,
+            categories: new FakeCategoryRepository(ActiveCategory()));
+
+        var result = await sut.PublishBatchAsync(
+            Guid.NewGuid(),
+            batchId,
+            new PublishGenerationBatchRequest(
+                ActiveCategoryId,
+                "EC",
+                "Scheduled",
+                ScheduledPublishAtUtc: schedule),
+            CancellationToken.None);
+
+        Assert.Equal(0, result.PublishedCount);
+        Assert.Equal(2, result.ScheduledCount);
+        Assert.All(artworkRepository.Items, artwork =>
+        {
+            Assert.Equal(PublishingStatus.Scheduled, artwork.PublishingStatus);
+            Assert.Equal(schedule, artwork.ScheduledPublishAtUtc);
+            Assert.Null(artwork.PublishedAtUtc);
+        });
+        Assert.Equal(GenerationJobStatus.Published, first.Status);
+        Assert.Equal(GenerationJobStatus.Published, second.Status);
+    }
+
+    [Fact]
+    public async Task Publish_batch_rejects_past_schedule_before_materializing()
+    {
+        var batchId = Guid.NewGuid();
+        var asset = Asset("past.png");
+        var job = Job(GenerationJobStatus.Approved, asset.Id, batchId);
+        using var publication = new FakePublicationStore();
+        var artworkRepository = new FakeArtworkRepository();
+
+        var sut = CreateService(
+            jobs: new FakeJobRepository(job),
+            assets: new FakeSourceAssetRepository(asset),
+            publication: publication,
+            artworks: artworkRepository,
+            categories: new FakeCategoryRepository(ActiveCategory()));
+
+        await Assert.ThrowsAsync<ArgumentException>(() =>
+            sut.PublishBatchAsync(
+                Guid.NewGuid(),
+                batchId,
+                new PublishGenerationBatchRequest(
+                    ActiveCategoryId,
+                    "EC",
+                    ScheduledPublishAtUtc: DateTime.UtcNow.AddMinutes(-5)),
+                CancellationToken.None));
+
+        Assert.Equal(0, publication.MaterializeCalls);
+        Assert.Empty(artworkRepository.Items);
+        Assert.Equal(GenerationJobStatus.Approved, job.Status);
+    }
+
     [Fact]
     public async Task Publish_batch_assigns_collection_in_order_and_inherits_country()
     {

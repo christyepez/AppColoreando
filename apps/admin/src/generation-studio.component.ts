@@ -33,7 +33,8 @@ type GenerationBatch = {
   completedCount: number; progressPercent: number; jobs: GenerationJob[];
 };
 type GenerationBatchPublication = {
-  batchId: string; publishedCount: number; artworks: { id: string; title: string }[];
+  batchId: string; publishedCount: number; scheduledCount: number;
+  artworks: { id: string; title: string }[];
 };
 
 type ArtifactKind = 'catalog' | 'lineart' | 'special';
@@ -128,6 +129,7 @@ type RegionAdjustment = {
         </label>
         <label>Title prefix<input [(ngModel)]="publishTitlePrefix" placeholder="Optional, e.g. Andes"></label>
         <label>Description<textarea [(ngModel)]="publishDescription" rows="2" placeholder="Optional description shared by the batch"></textarea></label>
+        <label>Schedule (optional)<input type="datetime-local" [(ngModel)]="publishScheduleLocal"><small>Leave empty to publish immediately.</small></label>
         <button (click)="publishBatch()" [disabled]="!canPublishBatch() || batchPublishing()">
           {{batchPublishing() ? 'Publishing batch…' : 'Publish approved batch'}}
         </button>
@@ -215,6 +217,7 @@ export class GenerationStudioComponent {
   publishCollectionId = '';
   publishTitlePrefix = '';
   publishDescription = '';
+  publishScheduleLocal = '';
   batchEditorialNote = '';
   difficulty = 2;
   readonly difficulties = [
@@ -362,8 +365,11 @@ export class GenerationStudioComponent {
 
   canPublishBatch() {
     const batch = this.selectedBatch();
+    const scheduleIsValid = !this.publishScheduleLocal
+      || new Date(this.publishScheduleLocal).getTime() > Date.now();
     return !!batch
       && !!this.publishCategoryId
+      && scheduleIsValid
       && batch.jobs.length > 0
       && batch.jobs.every(job => this.isStatus(job.status, 5, 'Approved'));
   }
@@ -381,11 +387,14 @@ export class GenerationStudioComponent {
         countryCode: this.publishCountryCode || null,
         collectionId: this.publishCollectionId || null,
         titlePrefix: this.publishTitlePrefix.trim() || null,
-        description: this.publishDescription.trim() || null
+        description: this.publishDescription.trim() || null,
+        scheduledPublishAtUtc: this.publishScheduleLocal ? new Date(this.publishScheduleLocal).toISOString() : null
       }).subscribe({
         next: result => {
           this.batchPublishing.set(false);
-          this.batchPublishMessage.set(`${result.publishedCount} artworks published`);
+          this.batchPublishMessage.set(result.scheduledCount > 0
+            ? `${result.scheduledCount} artworks scheduled`
+            : `${result.publishedCount} artworks published`);
           this.loadBatch(batch.batchId);
           this.reloadJobs();
         },

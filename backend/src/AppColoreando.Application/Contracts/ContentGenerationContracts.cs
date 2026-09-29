@@ -74,19 +74,22 @@ public sealed record PublishGenerationRequest(
     string Title,
     Guid CategoryId,
     string? CountryCode,
-    string? Description = null);
+    string? Description = null,
+    DateTime? ScheduledPublishAtUtc = null);
 
 public sealed record PublishGenerationBatchRequest(
     Guid CategoryId,
     string? CountryCode,
     string? TitlePrefix = null,
     string? Description = null,
-    Guid? CollectionId = null);
+    Guid? CollectionId = null,
+    DateTime? ScheduledPublishAtUtc = null);
 
 public sealed record GenerationBatchPublicationDto(
     Guid BatchId,
     int PublishedCount,
-    IReadOnlyCollection<ArtworkDto> Artworks);
+    IReadOnlyCollection<ArtworkDto> Artworks,
+    int ScheduledCount = 0);
 
 public sealed record GenerationPublicationAssets(
     string BundlePath,

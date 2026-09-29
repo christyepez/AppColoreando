@@ -93,6 +93,11 @@ public interface IGenerationPublicationStore
         Guid artworkId, string artifactKind, CancellationToken ct);
 }
 
+public interface IScheduledPublicationService
+{
+    Task<int> PromoteDueAsync(DateTime utcNow, CancellationToken ct);
+}
+
 public interface IGenerationPublishingService
 {
     Task<ArtworkDto> PublishAsync(

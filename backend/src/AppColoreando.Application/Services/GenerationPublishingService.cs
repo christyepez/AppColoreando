@@ -29,6 +29,7 @@ public sealed class GenerationPublishingService(
         EnsureApproved(job);
 
         var category = await GetActiveCategoryAsync(request.CategoryId, ct);
+        var scheduledPublishAtUtc = NormalizeSchedule(request.ScheduledPublishAtUtc);
         var artwork = await MaterializeArtworkAsync(
             userId,
             job,
@@ -36,6 +37,7 @@ public sealed class GenerationPublishingService(
             category.Id,
             request.CountryCode,
             request.Description,
+            scheduledPublishAtUtc,
             ct);
 
         await uow.SaveChangesAsync(ct);
@@ -57,6 +59,7 @@ public sealed class GenerationPublishingService(
             throw new KeyNotFoundException("Generation batch not found.");
 
         var category = await GetActiveCategoryAsync(request.CategoryId, ct);
+        var scheduledPublishAtUtc = NormalizeSchedule(request.ScheduledPublishAtUtc);
         var collection = request.CollectionId.HasValue
             ? await GetActiveCollectionAsync(request.CollectionId.Value, ct)
             : null;
@@ -92,6 +95,7 @@ public sealed class GenerationPublishingService(
                 category.Id,
                 effectiveCountryCode,
                 request.Description,
+                scheduledPublishAtUtc,
                 ct);
             published.Add(artwork);
 
@@ -111,12 +115,13 @@ public sealed class GenerationPublishingService(
             UserId = userId,
             EntityName = nameof(ArtworkGenerationJob),
             EntityId = batchId.ToString(),
-            Action = "GenerationBatchPublished",
+            Action = scheduledPublishAtUtc.HasValue ? "GenerationBatchScheduled" : "GenerationBatchPublished",
             ChangesJson = System.Text.Json.JsonSerializer.Serialize(new
             {
                 batchId,
                 count = published.Count,
                 collectionId = collection?.Id,
+                scheduledPublishAtUtc,
                 artworkIds = published.Select(x => x.Id).ToArray()
             })
         });
@@ -125,8 +130,9 @@ public sealed class GenerationPublishingService(
 
         return new GenerationBatchPublicationDto(
             batchId,
-            published.Count,
-            published.Select(Map).ToArray());
+            published.Count(x => x.PublishingStatus == PublishingStatus.Published),
+            published.Select(Map).ToArray(),
+            published.Count(x => x.PublishingStatus == PublishingStatus.Scheduled));
     }
 
     private async Task<Category> GetActiveCategoryAsync(Guid categoryId, CancellationToken ct)
@@ -154,6 +160,7 @@ public sealed class GenerationPublishingService(
         Guid categoryId,
         string? countryCode,
         string? description,
+        DateTime? scheduledPublishAtUtc,
         CancellationToken ct)
     {
         var overlay = await adjustments.ListAsync(job.ResultManifestPath!, ct);
@@ -177,8 +184,9 @@ public sealed class GenerationPublishingService(
             BundleChecksum = materialized.Checksum,
             Difficulty = (int)job.Difficulty + 1,
             RegionCount = materialized.RegionCount,
-            PublishingStatus = PublishingStatus.Published,
-            PublishedAtUtc = DateTime.UtcNow
+            PublishingStatus = scheduledPublishAtUtc.HasValue ? PublishingStatus.Scheduled : PublishingStatus.Published,
+            ScheduledPublishAtUtc = scheduledPublishAtUtc,
+            PublishedAtUtc = scheduledPublishAtUtc.HasValue ? null : DateTime.UtcNow
         };
         artwork.Assets.Add(new ArtworkAsset
         {
@@ -205,8 +213,8 @@ public sealed class GenerationPublishingService(
             UserId = userId,
             EntityName = nameof(ArtworkGenerationJob),
             EntityId = job.Id.ToString(),
-            Action = "GenerationPublished",
-            ChangesJson = System.Text.Json.JsonSerializer.Serialize(new { artworkId })
+            Action = scheduledPublishAtUtc.HasValue ? "GenerationScheduled" : "GenerationPublished",
+            ChangesJson = System.Text.Json.JsonSerializer.Serialize(new { artworkId, scheduledPublishAtUtc })
         });
 
         return artwork;
@@ -218,6 +226,17 @@ public sealed class GenerationPublishingService(
             throw new InvalidOperationException("Generation job must be approved before publication.");
         if (string.IsNullOrWhiteSpace(job.ResultManifestPath))
             throw new InvalidOperationException("Generation result is not ready.");
+    }
+
+    private static DateTime? NormalizeSchedule(DateTime? scheduledPublishAtUtc)
+    {
+        if (!scheduledPublishAtUtc.HasValue) return null;
+        var utc = scheduledPublishAtUtc.Value.Kind == DateTimeKind.Utc
+            ? scheduledPublishAtUtc.Value
+            : scheduledPublishAtUtc.Value.ToUniversalTime();
+        if (utc <= DateTime.UtcNow)
+            throw new ArgumentException("ScheduledPublishAtUtc must be in the future.");
+        return utc;
     }
 
     private static string BuildBatchTitle(string? prefix, string fileName)

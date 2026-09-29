@@ -111,6 +111,15 @@ public sealed class ArtworkRepository(AppDbContext db) : IArtworkRepository
     }
     public async Task AddAsync(Artwork artwork, CancellationToken ct) => await db.Artworks.AddAsync(artwork, ct);
     public Task<int> CountPublishedAsync(CancellationToken ct) => db.Artworks.CountAsync(x => x.PublishingStatus == PublishingStatus.Published, ct);
+    public async Task<IReadOnlyCollection<Artwork>> ListDueScheduledAsync(DateTime utcNow, int take, CancellationToken ct) =>
+        await db.Artworks
+            .Where(x => x.PublishingStatus == PublishingStatus.Scheduled
+                && x.ScheduledPublishAtUtc != null
+                && x.ScheduledPublishAtUtc <= utcNow)
+            .OrderBy(x => x.ScheduledPublishAtUtc)
+            .ThenBy(x => x.Id)
+            .Take(Math.Clamp(take, 1, 500))
+            .ToArrayAsync(ct);
     internal static ArtworkDto MapArtwork(Artwork x) => new(x.Id, x.Title, x.Description, x.CategoryId, x.CountryCode, x.BrandId, x.LicenseAgreementId, x.LicenseType, x.LicenseReference, x.ThumbnailUrl, x.AssetUrl, x.BundleChecksum, x.Difficulty, x.RegionCount, x.PublishingStatus, x.ScheduledPublishAtUtc, x.PublishedAtUtc, x.Assets.Select(a => new ArtworkAssetDto(a.Id, a.Kind, a.Uri, a.ContentType, a.Checksum, a.SizeBytes, a.IsPrimary)).ToArray());
 }
 

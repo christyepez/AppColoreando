@@ -293,3 +293,15 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Inactive or missing collections reject the whole batch before any artwork materialization, preserving all-or-nothing publication semantics.
 - Audit metadata records the selected collection id together with the published artwork ids.
 - Validation on MarketingIndo: .NET Release build 0 warnings/0 errors; backend 47/47 tests PASS; Angular production build PASS; git diff --check PASS.
+
+
+## S61 — Scheduled Batch Publication — Complete
+- Batch and single generated-artwork publication contracts now accept an optional ScheduledPublishAtUtc.
+- Future publication requests materialize immutable bundles immediately but persist Artwork as Scheduled with PublishedAtUtc unset.
+- Past schedule timestamps are rejected before bundle materialization, preserving all-or-nothing publication behavior.
+- Generation Studio exposes an optional local datetime control, validates that the selected time is still in the future, and converts it to UTC before calling the API.
+- Batch publication responses distinguish immediate PublishedCount from ScheduledCount.
+- Added ScheduledPublicationService in Application; it promotes due artworks to Published in one unit-of-work commit.
+- Added ScheduledPublicationWorker in the .NET Worker process with a configurable polling interval (default 30 seconds), keeping background orchestration outside domain/application logic.
+- ArtworkRepository now returns tracked due-scheduled artworks ordered by scheduled time for bounded promotion batches.
+- Validation on MarketingIndo: .NET Release build 0 warnings/0 errors; backend 51/51 tests PASS; Angular production build PASS; git diff --check PASS.
