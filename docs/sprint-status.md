@@ -305,3 +305,10 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Added ScheduledPublicationWorker in the .NET Worker process with a configurable polling interval (default 30 seconds), keeping background orchestration outside domain/application logic.
 - ArtworkRepository now returns tracked due-scheduled artworks ordered by scheduled time for bounded promotion batches.
 - Validation on MarketingIndo: .NET Release build 0 warnings/0 errors; backend 51/51 tests PASS; Angular production build PASS; git diff --check PASS.
+
+
+## S62 — Worker Runtime Hardening — Complete
+- Worker runtime image now installs libgssapi-krb5-2 and its minimal Kerberos runtime dependencies.
+- Removes the libgssapi_krb5.so.2 load warning emitted by the RabbitMQ/.NET runtime path on Linux.
+- Rebuilt and force-recreated only the Worker container; API/Web/Admin/Visual Processor remained available.
+- Verified worker startup, RabbitMQ generation queue listener, and scheduled-publication EF query after recreation.
