@@ -329,3 +329,13 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Cancellation remains graceful; application shutdown does not log false reconnect failures.
 - Validation on trabajo: Worker project Release build 0 warnings/0 errors; backend suite 51/51 PASS; rebuilt Worker image deployed.
 - Fault-injection validation: RabbitMQ stopped while Worker was live -> Worker remained running and logged retry warnings; RabbitMQ restarted/healthy -> Worker automatically logged "Artwork generation worker listening on artwork.generation.requested" again without container restart.
+
+
+## S65 — Themed Starter Catalog — Complete
+- Added five original production-ready starter artworks served by the API: Andean, Space Opera, Comic, Anime and Mecha.
+- Starter bundles and WebP thumbnails are packaged with AppColoreando.Api and copied into the published content root during idempotent database initialization.
+- Each starter is linked to its thematic category and collection with deterministic ids and collection sort order.
+- Published artwork metadata includes checksum, region count, bundle/thumbnail assets, original-license metadata and country assignment.
+- Added browser-relative Admin API resolution so the local Admin consistently targets port 8086 without falling back to the old 8080 endpoint.
+- Runtime validation on trabajo: Docker API build PASS; all five bundle endpoints HTTP 200; all five thumbnail endpoints HTTP 200; each starter exposes 240 regions and PublishingStatus=Published.
+- Collection validation: Andes Ecuador now contains starter content; Space Opera, Comic, Anime and Mecha collections are no longer empty.

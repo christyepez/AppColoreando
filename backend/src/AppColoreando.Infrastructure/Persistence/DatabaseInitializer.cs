@@ -136,6 +136,9 @@ public static class DatabaseInitializer
             }
         }
 
+        await db.SaveChangesAsync(ct);
+        await StarterCatalogSeed.SeedAsync(db, configuration, ct);
+
         var adminEmail = configuration["Seed:AdminEmail"]?.Trim().ToLowerInvariant();
         var adminPassword = configuration["Seed:AdminPassword"];
         if (!string.IsNullOrWhiteSpace(adminEmail) && !string.IsNullOrWhiteSpace(adminPassword))
