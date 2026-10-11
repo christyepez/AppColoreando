@@ -312,3 +312,11 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Removes the libgssapi_krb5.so.2 load warning emitted by the RabbitMQ/.NET runtime path on Linux.
 - Rebuilt and force-recreated only the Worker container; API/Web/Admin/Visual Processor remained available.
 - Verified worker startup, RabbitMQ generation queue listener, and scheduled-publication EF query after recreation.
+
+
+## S63 — Local Runtime & Android Debug Hardening — Complete
+- API runtime image now installs libgssapi-krb5-2, matching the Worker runtime and removing the same Kerberos/GSS native dependency risk on Linux.
+- Android debug manifest disables Impeller only for debug builds, avoiding local Windows Application Control failures in Flutter's impellerc path while leaving release behavior unchanged.
+- Local Kotlin caches and release-artifacts are ignored so workstation build output does not pollute Git status.
+- Canonical stack migrated to C:\Users\chris\source\repos\AppColoreandoCanonical with Docker project name appcoloreando, preserving existing PostgreSQL/MinIO/content volumes.
+- Validation on trabajo: API/Web/Admin/Visual Processor HTTP 200; PostgreSQL/RabbitMQ healthy; Worker S62 stable and consuming generation jobs; canonical APK installed successfully on emulator-5554; canonical web mounted and served from AppColoreandoCanonical.
