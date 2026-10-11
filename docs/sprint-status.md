@@ -339,3 +339,11 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Added browser-relative Admin API resolution so the local Admin consistently targets port 8086 without falling back to the old 8080 endpoint.
 - Runtime validation on trabajo: Docker API build PASS; all five bundle endpoints HTTP 200; all five thumbnail endpoints HTTP 200; each starter exposes 240 regions and PublishingStatus=Published.
 - Collection validation: Andes Ecuador now contains starter content; Space Opera, Comic, Anime and Mecha collections are no longer empty.
+
+
+## S66 — Starter Catalog Runtime Gate — Complete
+- Extended tools/verify-local-stack.ps1 with runtime checks for all five themed starter artworks.
+- Preflight now validates metadata, playable region count, bundle endpoint, thumbnail endpoint and non-empty thematic collections.
+- Renamed the script banner from the historical S51 label to the generic local production preflight name.
+- Runtime validation on trabajo: API/Web/Admin/Visual Processor HTTP 200; all five starter artworks PASS with 240 regions; themed starter collections contain API artworks; all required ports listening; PRECHECK PASSED.
+- Flutter targeted validation: catalog_repository_test.dart + generated_artwork_repository_test.dart = 6/6 PASS.

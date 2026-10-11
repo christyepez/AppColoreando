@@ -23,7 +23,7 @@ function Check-Http {
 
 Set-Location $RepoRoot
 
-Write-Host "== AppColoreando S51 Local Production Preflight =="
+Write-Host "== AppColoreando Local Production Preflight =="
 
 $compose = docker compose config -q 2>&1
 if ($LASTEXITCODE -ne 0) {
@@ -61,6 +61,62 @@ try {
     }
 } catch {
     $failures.Add("Visual engine metadata check failed: $($_.Exception.Message)")
+}
+
+$starterArtworks = @(
+    @{ Id = 'a1111111-1111-4111-8111-111111111111'; Title = 'Andean Summit & Lagoon' },
+    @{ Id = 'a2222222-2222-4222-8222-222222222222'; Title = 'Twin Suns Patrol' },
+    @{ Id = 'a3333333-3333-4333-8333-333333333333'; Title = 'Urban Guardian' },
+    @{ Id = 'a4444444-4444-4444-8444-444444444444'; Title = 'Skyline Adventurer' },
+    @{ Id = 'a5555555-5555-4555-8555-555555555555'; Title = 'Neon Sentinel Mecha' }
+)
+foreach ($starter in $starterArtworks) {
+    try {
+        $meta = Invoke-RestMethod "http://127.0.0.1:8086/api/catalog/artworks/$($starter.Id)" -TimeoutSec 10
+        if ($meta.title -ne $starter.Title) {
+            $failures.Add("Starter artwork title mismatch for $($starter.Id)")
+            continue
+        }
+        if ([int]$meta.regionCount -lt 1) {
+            $failures.Add("Starter artwork has no playable regions: $($starter.Title)")
+            continue
+        }
+        $bundle = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:8086/api/catalog/artworks/$($starter.Id)/bundle" -TimeoutSec 10
+        $thumb = Invoke-WebRequest -UseBasicParsing "http://127.0.0.1:8086/api/catalog/artworks/$($starter.Id)/thumbnail" -TimeoutSec 10
+        if ([int]$bundle.StatusCode -ne 200 -or $bundle.Content.Length -lt 1000) {
+            $failures.Add("Starter bundle invalid: $($starter.Title)")
+            continue
+        }
+        if ([int]$thumb.StatusCode -ne 200 -or $thumb.RawContentLength -lt 1000) {
+            $failures.Add("Starter thumbnail invalid: $($starter.Title)")
+            continue
+        }
+        Write-Host "[PASS] starter $($starter.Title) ($($meta.regionCount) regions)"
+    } catch {
+        $failures.Add("Starter artwork check failed for $($starter.Title): $($_.Exception.Message)")
+    }
+}
+
+try {
+    $collections = Invoke-RestMethod 'http://127.0.0.1:8086/api/catalog/collections' -TimeoutSec 10
+    $requiredCollections = @(
+        'andes-ecuador',
+        'space-opera-originals',
+        'comic-originals',
+        'anime-originals',
+        'mecha-originals'
+    )
+    foreach ($slug in $requiredCollections) {
+        $collection = $collections | Where-Object slug -eq $slug | Select-Object -First 1
+        if ($null -eq $collection -or [int]$collection.artworkCount -lt 1) {
+            $failures.Add("Starter collection missing or empty: $slug")
+        }
+    }
+    if (-not $failures.Where({ $_ -like 'Starter collection*' }).Count) {
+        Write-Host "[PASS] themed starter collections contain API artworks"
+    }
+} catch {
+    $failures.Add("Starter collection check failed: $($_.Exception.Message)")
 }
 
 $ports = @{
