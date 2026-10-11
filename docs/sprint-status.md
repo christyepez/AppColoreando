@@ -320,3 +320,12 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Local Kotlin caches and release-artifacts are ignored so workstation build output does not pollute Git status.
 - Canonical stack migrated to C:\Users\chris\source\repos\AppColoreandoCanonical with Docker project name appcoloreando, preserving existing PostgreSQL/MinIO/content volumes.
 - Validation on trabajo: API/Web/Admin/Visual Processor HTTP 200; PostgreSQL/RabbitMQ healthy; Worker S62 stable and consuming generation jobs; canonical APK installed successfully on emulator-5554; canonical web mounted and served from AppColoreandoCanonical.
+
+
+## S64 — RabbitMQ Startup & Recovery Resilience — Complete
+- Generation Worker now wraps RabbitMQ connection/consumption in a reconnect loop instead of allowing BrokerUnreachableException to stop the host.
+- Startup failures, broker shutdowns and closed channels are treated as transient; retry delay is configurable through RabbitMQ:ReconnectDelaySeconds (default 5s, clamped 1-60s).
+- RabbitMQ automatic recovery remains enabled and the Worker also recreates connection/channel/queue after unrecoverable closure.
+- Cancellation remains graceful; application shutdown does not log false reconnect failures.
+- Validation on trabajo: Worker project Release build 0 warnings/0 errors; backend suite 51/51 PASS; rebuilt Worker image deployed.
+- Fault-injection validation: RabbitMQ stopped while Worker was live -> Worker remained running and logged retry warnings; RabbitMQ restarted/healthy -> Worker automatically logged "Artwork generation worker listening on artwork.generation.requested" again without container restart.

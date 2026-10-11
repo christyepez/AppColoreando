@@ -3,6 +3,7 @@ using AppColoreando.Application.Abstractions;
 using AppColoreando.Application.Contracts;
 using AppColoreando.Domain.Entities;
 using RabbitMQ.Client;
+using RabbitMQ.Client.Exceptions;
 
 namespace AppColoreando.Worker;
 
@@ -17,10 +18,46 @@ public sealed class Worker(
         {
             HostName = configuration["RabbitMQ:Host"] ?? "localhost",
             UserName = configuration["RabbitMQ:User"] ?? throw new InvalidOperationException("RabbitMQ:User is required."),
-            Password = configuration["RabbitMQ:Password"] ?? throw new InvalidOperationException("RabbitMQ:Password is required.")
+            Password = configuration["RabbitMQ:Password"] ?? throw new InvalidOperationException("RabbitMQ:Password is required."),
+            AutomaticRecoveryEnabled = true,
+            NetworkRecoveryInterval = TimeSpan.FromSeconds(5)
         };
         var queueName = configuration["RabbitMQ:GenerationQueue"] ?? "artwork.generation.requested";
+        var reconnectDelay = TimeSpan.FromSeconds(Math.Clamp(
+            configuration.GetValue("RabbitMQ:ReconnectDelaySeconds", 5),
+            1,
+            60));
 
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await ConsumeAsync(factory, queueName, stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (BrokerUnreachableException ex)
+            {
+                logger.LogWarning(ex, "RabbitMQ is unavailable. Retrying in {DelaySeconds}s.", reconnectDelay.TotalSeconds);
+                await DelayBeforeReconnectAsync(reconnectDelay, stoppingToken);
+            }
+            catch (AlreadyClosedException ex)
+            {
+                logger.LogWarning(ex, "RabbitMQ connection/channel closed. Retrying in {DelaySeconds}s.", reconnectDelay.TotalSeconds);
+                await DelayBeforeReconnectAsync(reconnectDelay, stoppingToken);
+            }
+            catch (EndOfStreamException ex)
+            {
+                logger.LogWarning(ex, "RabbitMQ stream ended. Retrying in {DelaySeconds}s.", reconnectDelay.TotalSeconds);
+                await DelayBeforeReconnectAsync(reconnectDelay, stoppingToken);
+            }
+        }
+    }
+
+    private async Task ConsumeAsync(ConnectionFactory factory, string queueName, CancellationToken stoppingToken)
+    {
         await using var connection = await factory.CreateConnectionAsync(stoppingToken);
         await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
         await channel.QueueDeclareAsync(queueName, true, false, false, null, cancellationToken: stoppingToken);
@@ -47,6 +84,17 @@ public sealed class Worker(
                 logger.LogError(ex, "Generation job message failed.");
                 await channel.BasicNackAsync(delivery.DeliveryTag, multiple: false, requeue: false, cancellationToken: stoppingToken);
             }
+        }
+    }
+
+    private static async Task DelayBeforeReconnectAsync(TimeSpan delay, CancellationToken stoppingToken)
+    {
+        try
+        {
+            await Task.Delay(delay, stoppingToken);
+        }
+        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+        {
         }
     }
 
