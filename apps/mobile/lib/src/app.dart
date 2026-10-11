@@ -11,6 +11,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 final localeProvider = StateProvider<Locale>((ref) => const Locale('es'));
+final catalogDiscoveryProvider = FutureProvider<CatalogDiscovery>((ref) =>
+    ref.watch(catalogRepositoryProvider).discovery());
 final personalizedRecommendationsProvider = FutureProvider<List<CatalogArtwork>>((ref) async {
   final library = await ref.watch(localLibrarySnapshotProvider.future);
   final ids = <String>{...library.favoriteIds, ...library.recentIds}.toList();
@@ -26,7 +28,12 @@ final routerProvider = Provider<GoRouter>((ref) => GoRouter(
   routes: [
     ShellRoute(builder: (context, state, child) => AppShell(child: child), routes: [
       GoRoute(path: '/', builder: (_, __) => const HomePage()),
-      GoRoute(path: '/catalog', builder: (_, __) => const CatalogPage()),
+      GoRoute(
+        path: '/catalog',
+        builder: (_, state) => CatalogPage(
+          initialCollectionId: state.uri.queryParameters['collection'],
+        ),
+      ),
       GoRoute(path: '/profile', builder: (_, __) => const ProfilePage()),
       GoRoute(path: '/settings', builder: (_, __) => const SettingsPage()),
     ]),
@@ -103,6 +110,7 @@ class HomePage extends ConsumerWidget {
       )),
       const SliverToBoxAdapter(child: _DailyBanner()),
       const SliverToBoxAdapter(child: _EventsStrip()),
+      const SliverToBoxAdapter(child: _FeaturedCollectionsStrip()),
       SliverToBoxAdapter(child: SizedBox(height: 52, child: ListView(
         padding: const EdgeInsets.symmetric(horizontal: 20),
         scrollDirection: Axis.horizontal,
@@ -194,6 +202,88 @@ class _EventsStrip extends ConsumerWidget {
     );
   }
 }
+class _FeaturedCollectionsStrip extends ConsumerWidget {
+  const _FeaturedCollectionsStrip();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final collections = (ref.watch(catalogDiscoveryProvider).valueOrNull?.collections
+            ?? const <CatalogCollection>[])
+        .where((x) => x.artworkCount > 0)
+        .take(8)
+        .toList();
+    if (collections.isEmpty) return const SizedBox.shrink();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 14),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Colecciones destacadas', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 2),
+            Text('Explora colecciones originales desde la API', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black45)),
+          ])),
+          TextButton(onPressed: () => context.go('/catalog'), child: const Text('Ver todas')),
+        ]),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 104,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: collections.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (_, i) {
+              final collection = collections[i];
+              return SizedBox(
+                width: 196,
+                child: Material(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(18),
+                  clipBehavior: Clip.antiAlias,
+                  child: InkWell(
+                    onTap: () => context.go(Uri(
+                      path: '/catalog',
+                      queryParameters: {'collection': collection.id},
+                    ).toString()),
+                    child: Padding(
+                      padding: const EdgeInsets.all(14),
+                      child: Row(children: [
+                        Container(
+                          width: 48,
+                          height: 48,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(15),
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF243B55), Color(0xFF4CA6A8)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                          ),
+                          child: const Icon(Icons.collections_bookmark_rounded, color: Colors.white),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(collection.name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 4),
+                            Text('${collection.artworkCount} ilustraciones', style: const TextStyle(fontSize: 11, color: Colors.black45)),
+                          ],
+                        )),
+                      ]),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ]),
+    );
+  }
+}
+
 class _Pill extends StatelessWidget {
   const _Pill(this.label, this.selected);
   final String label;
@@ -271,7 +361,10 @@ class _RoundAction extends StatelessWidget {
 }
 
 class CatalogPage extends ConsumerStatefulWidget {
-  const CatalogPage({super.key});
+  const CatalogPage({super.key, this.initialCollectionId});
+
+  final String? initialCollectionId;
+
   @override
   ConsumerState<CatalogPage> createState() => _CatalogPageState();
 }
@@ -290,6 +383,7 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
   @override
   void initState() {
     super.initState();
+    collectionId = widget.initialCollectionId;
     Future.microtask(() async {
       await _loadDiscovery();
       await _runSearch();
@@ -299,7 +393,14 @@ class _CatalogPageState extends ConsumerState<CatalogPage> {
   Future<void> _loadDiscovery() async {
     try {
       final value = await ref.read(catalogRepositoryProvider).discovery();
-      if (mounted) setState(() => _discovery = value);
+      if (mounted) {
+        setState(() {
+          _discovery = value;
+          if (collectionId != null && !value.collections.any((x) => x.id == collectionId)) {
+            collectionId = null;
+          }
+        });
+      }
     } catch (_) {}
   }
 

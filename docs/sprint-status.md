@@ -347,3 +347,13 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Renamed the script banner from the historical S51 label to the generic local production preflight name.
 - Runtime validation on trabajo: API/Web/Admin/Visual Processor HTTP 200; all five starter artworks PASS with 240 regions; themed starter collections contain API artworks; all required ports listening; PRECHECK PASSED.
 - Flutter targeted validation: catalog_repository_test.dart + generated_artwork_repository_test.dart = 6/6 PASS.
+
+
+## S67 — Featured Themed Collections — Complete
+- Home now loads API discovery and shows a dedicated Featured Collections strip for non-empty remote collections.
+- Collection cards display artwork counts and navigate directly to Catalog with the selected collection encoded in the route query.
+- Catalog accepts an initial collection id from the URL and validates it against discovery data before searching.
+- Invalid or stale collection ids gracefully fall back to an unfiltered catalog instead of breaking the collection dropdown.
+- Runtime/content validation on trabajo: S65 starter collections are populated and available through discovery.
+- Flutter validation: analyze PASS; catalog/generated-artwork/widget targeted tests 7/7 PASS; Web Release build PASS.
+- Android host build remains blocked only by Windows Application Control on dartaotruntime.exe, so Android deployment is built in Docker instead of weakening workstation security policy.
