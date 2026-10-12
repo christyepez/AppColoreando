@@ -6,7 +6,7 @@ namespace AppColoreando.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]
-public sealed class AuthController(IAuthService service) : ControllerBase
+public sealed class AuthController(IAuthService service, IConfiguration configuration, IHostEnvironment environment) : ControllerBase
 {
     [HttpPost("register")]
     [ProducesResponseType(typeof(UserDto), StatusCodes.Status201Created)]
@@ -22,6 +22,26 @@ public sealed class AuthController(IAuthService service) : ControllerBase
     public async Task<IActionResult> Login(LoginRequest request, CancellationToken ct)
     {
         var result = await service.LoginAsync(request, HttpContext.Connection.RemoteIpAddress?.ToString(), ct);
+        return result is null ? Unauthorized() : Ok(result);
+    }
+
+    [HttpPost("dev-login")]
+    [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> DevLogin(CancellationToken ct)
+    {
+        if (!environment.IsDevelopment() || !configuration.GetValue("Seed:EnableDevAdminLogin", false))
+            return NotFound();
+
+        var email = configuration["Seed:AdminEmail"];
+        var password = configuration["Seed:AdminPassword"];
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(password))
+            return NotFound();
+
+        var result = await service.LoginAsync(
+            new LoginRequest(email, password, "admin-dev-local", "Local Development Admin"),
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            ct);
         return result is null ? Unauthorized() : Ok(result);
     }
 
