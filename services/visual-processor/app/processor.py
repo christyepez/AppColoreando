@@ -495,6 +495,85 @@ def _merge_micro_regions(labels: np.ndarray, centers: np.ndarray, options: Proce
     return result
 
 
+
+def _region_component_areas(labels: np.ndarray, color_count: int) -> list[int]:
+    areas: list[int] = []
+    for color_id in range(color_count):
+        mask = np.where(labels == color_id, 255, 0).astype(np.uint8)
+        count, _, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+        if count > 1:
+            areas.extend(int(value) for value in stats[1:, cv2.CC_STAT_AREA])
+    return areas
+
+
+def _limit_region_count(labels: np.ndarray, centers: np.ndarray, options: ProcessorOptions) -> np.ndarray:
+    target = max(1, int(options.target_regions))
+    result = labels.astype(np.int32).copy()
+    kernel = np.ones((3, 3), np.uint8)
+
+    for _ in range(6):
+        areas = _region_component_areas(result, len(centers))
+        total = len(areas)
+        if total <= target:
+            return result
+
+        merges_needed = total - target
+        sorted_areas = sorted(areas)
+        cutoff = sorted_areas[min(len(sorted_areas) - 1, merges_needed - 1)]
+        merged = 0
+
+        for color_id in range(len(centers)):
+            mask = np.where(result == color_id, 255, 0).astype(np.uint8)
+            count, components, stats, _ = cv2.connectedComponentsWithStats(mask, connectivity=8)
+            if count <= 1:
+                continue
+
+            component_ids = list(range(1, count))
+            component_ids.sort(key=lambda component_id: int(stats[component_id, cv2.CC_STAT_AREA]))
+            for component_id in component_ids:
+                if merged >= merges_needed:
+                    break
+                area = int(stats[component_id, cv2.CC_STAT_AREA])
+                if area > cutoff:
+                    continue
+
+                component_mask = components == component_id
+                border = cv2.dilate(component_mask.astype(np.uint8), kernel, iterations=1).astype(bool)
+                border &= ~component_mask
+                neighbours = result[border]
+                neighbours = neighbours[neighbours != color_id]
+                if neighbours.size == 0:
+                    continue
+
+                candidates, counts = np.unique(neighbours, return_counts=True)
+                best_id = None
+                best_score = float("inf")
+                for candidate, boundary_count in zip(candidates, counts):
+                    candidate_id = int(candidate)
+                    if candidate_id < 0 or candidate_id >= len(centers):
+                        continue
+                    distance = _delta_e(centers[color_id], centers[candidate_id])
+                    score = distance / max(1.0, float(boundary_count))
+                    if score < best_score:
+                        best_score = score
+                        best_id = candidate_id
+
+                if best_id is not None:
+                    result[component_mask] = best_id
+                    merged += 1
+
+            if merged >= merges_needed:
+                break
+
+        if merged == 0:
+            break
+
+    remaining = len(_region_component_areas(result, len(centers)))
+    if remaining > target:
+        raise ValueError("REGION_LIMIT_ENFORCEMENT_FAILED")
+    return result
+
+
 def _compact_labels_and_centers(labels: np.ndarray, centers: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     used = np.unique(labels.astype(np.int32))
     if len(used) == len(centers) and np.array_equal(used, np.arange(len(centers), dtype=np.int32)):
@@ -746,6 +825,7 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
     labels, centers = _merge_similar_clusters(labels, centers, options.difficulty)
     labels = _edge_aware_smooth_labels(labels, lab, options.edge_sensitivity)
     labels = _merge_micro_regions(labels, centers, options)
+    labels = _limit_region_count(labels, centers, options)
     labels, centers = _compact_labels_and_centers(labels, centers)
     palette = _vivid_palette(centers, options.saturation_boost, options.contrast_boost)
     palette = _harmonize_palette(palette)
