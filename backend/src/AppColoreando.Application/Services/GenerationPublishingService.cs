@@ -26,13 +26,13 @@ public sealed class GenerationPublishingService(
             ?? throw new KeyNotFoundException("Generation job not found.");
         if (string.IsNullOrWhiteSpace(job.ResultManifestPath))
             throw new InvalidOperationException("Generation result is not ready.");
+        if (job.Status != GenerationJobStatus.Approved)
+            throw new InvalidOperationException("Generation job must be approved before publishing.");
+
         var category = await categories.GetAsync(request.CategoryId, ct)
             ?? throw new KeyNotFoundException("Category not found.");
         if (!category.IsActive)
             throw new InvalidOperationException("Category is inactive.");
-
-        if (job.Status is GenerationJobStatus.Failed or GenerationJobStatus.Pending or GenerationJobStatus.Queued or GenerationJobStatus.Running)
-            throw new InvalidOperationException("Generation job is not publishable yet.");
 
         var artworkId = Guid.NewGuid();
         var overlay = await adjustments.ListAsync(job.ResultManifestPath, ct);
