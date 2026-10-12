@@ -7,12 +7,14 @@ on:
       - 'backend/**'
       - 'apps/admin/**'
       - 'services/visual-processor/**'
+      - 'tools/content-seed/**'
       - '.github/workflows/backend-ci.yml'
   pull_request:
     paths:
       - 'backend/**'
       - 'apps/admin/**'
       - 'services/visual-processor/**'
+      - 'tools/content-seed/**'
       - '.github/workflows/backend-ci.yml'
 
 jobs:
@@ -64,5 +66,9 @@ jobs:
       - name: Visual processor tests
         working-directory: services/visual-processor
         run: pytest -q
+      - name: Validate content seed importer
+        run: python -m py_compile tools/content-seed/import_public_domain.py
+      - name: Validate content seed manifest
+        run: python -m json.tool tools/content-seed/public-domain-seed.json > /dev/null
       - name: Build visual processor image
         run: docker build -t appcoloreando-visual-processor:test services/visual-processor

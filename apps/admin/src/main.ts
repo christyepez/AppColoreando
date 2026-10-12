@@ -13,7 +13,8 @@ type UserDto = { id: string; email: string; displayName: string; role: string; i
 type Metrics = { users: number; publishedArtworks: number; completions: number; activityEvents: number };
 type Category = { id: string; name: string; slug: string; isActive: boolean };
 type Country = { id: string; code: string; name: string; isActive: boolean };
-type Artwork = { id: string; title: string; countryCode?: string; difficulty: number; regionCount: number; publishingStatus: string };
+type Artwork = { id: string; title: string; countryCode?: string; difficulty: number; regionCount: number; publishingStatus: string; thumbnailUrl?: string };
+type Collection = { id: string; name: string; slug: string; description?: string; artworkCount: number; isActive: boolean };
 type Page<T> = { items: T[]; page: number; pageSize: number; total: number };
 
 @Injectable({ providedIn: 'root' })
@@ -60,7 +61,7 @@ class ApiClient {
   updateUser(user: UserDto) { return this.http.put<UserDto>(`${apiBase}/admin/users/${user.id}`, { displayName: user.displayName, role: user.role, isActive: user.isActive }); }
   categories() { return this.http.get<Category[]>(`${apiBase}/catalog/categories`); }
   countries() { return this.http.get<Country[]>(`${apiBase}/catalog/countries`); }
-  collections() { return this.http.get<unknown[]>(`${apiBase}/catalog/collections`); }
+  collections() { return this.http.get<Collection[]>(`${apiBase}/catalog/collections`); }
   artworks() { return this.http.get<Page<Artwork>>(`${apiBase}/catalog/artworks?pageSize=100`); }
   createCategory(name: string, slug: string) { return this.http.post<Category>(`${apiBase}/admin/categories`, { name, slug, isActive: true }); }
   upsertCountry(code: string, name: string) { return this.http.post<Country>(`${apiBase}/admin/countries`, { code, name, isActive: true }); }
@@ -149,19 +150,33 @@ class DashboardComponent { readonly metrics = signal<Metrics | null>(null); cons
   standalone: true,
   imports: [CommonModule, FormsModule],
   template: `
-    <section class="toolbar"><input [(ngModel)]="categoryName" placeholder="Category"><input [(ngModel)]="categorySlug" placeholder="slug"><button (click)="createCategory()">Add category</button><input [(ngModel)]="countryCode" placeholder="EC"><input [(ngModel)]="countryName" placeholder="Country"><button (click)="saveCountry()">Save country</button></section>
-    <section class="grid two"><div class="panel"><h3>Categories</h3><table><tr *ngFor="let c of categories()"><td>{{c.name}}</td><td>{{c.slug}}</td></tr></table></div><div class="panel"><h3>Artworks</h3><table><tr *ngFor="let a of artworks()"><td>{{a.title}}</td><td>{{a.countryCode}}</td><td>{{a.publishingStatus}}</td></tr></table></div></section>
+    <section class="toolbar"><input [(ngModel)]="categoryName" placeholder="Categoría"><input [(ngModel)]="categorySlug" placeholder="slug"><button (click)="createCategory()">Agregar categoría</button><input [(ngModel)]="countryCode" placeholder="EC"><input [(ngModel)]="countryName" placeholder="País"><button (click)="saveCountry()">Guardar país</button></section>
+    <section class="grid two">
+      <div class="panel"><h3>Categorías</h3><table><tr *ngFor="let c of categories()"><td>{{c.name}}</td><td>{{c.slug}}</td></tr></table></div>
+      <div class="panel"><h3>Colecciones</h3><table><tr *ngFor="let c of collections()"><td>{{c.name}}</td><td>{{c.artworkCount}} imágenes</td><td>{{c.isActive ? 'Activa' : 'Inactiva'}}</td></tr></table></div>
+    </section>
+    <section class="panel content-artworks">
+      <div class="section-title"><div><span class="eyebrow">CATÁLOGO PUBLICADO</span><h3>Imágenes listas para colorear</h3></div><span class="status-pill">{{artworks().length}} elementos</span></div>
+      <div class="artwork-grid">
+        <article class="artwork-card" *ngFor="let a of artworks()">
+          <div class="artwork-thumb"><img *ngIf="a.thumbnailUrl" [src]="thumbnail(a)" [alt]="a.title" loading="lazy"><span *ngIf="!a.thumbnailUrl">Sin miniatura</span></div>
+          <div class="artwork-meta"><strong>{{a.title}}</strong><span>Dificultad {{a.difficulty}} · {{a.regionCount}} regiones</span><span>{{a.publishingStatus}}</span></div>
+        </article>
+      </div>
+    </section>
   `
 })
 class ContentComponent {
   private readonly api = inject(ApiClient);
   readonly categories = signal<Category[]>([]);
+  readonly collections = signal<Collection[]>([]);
   readonly artworks = signal<Artwork[]>([]);
   categoryName = ''; categorySlug = ''; countryCode = ''; countryName = '';
   constructor() { this.reload(); }
-  reload() { this.api.categories().subscribe(x => this.categories.set(x)); this.api.artworks().subscribe(x => this.artworks.set(x.items)); }
+  reload() { this.api.categories().subscribe(x => this.categories.set(x)); this.api.collections().subscribe(x => this.collections.set(x)); this.api.artworks().subscribe(x => this.artworks.set(x.items)); }
   createCategory() { this.api.createCategory(this.categoryName, this.categorySlug).subscribe(() => this.reload()); }
   saveCountry() { this.api.upsertCountry(this.countryCode, this.countryName).subscribe(() => { this.countryCode = ''; this.countryName = ''; }); }
+  thumbnail(a: Artwork) { if (!a.thumbnailUrl) return ''; if (/^https?:\/\//.test(a.thumbnailUrl)) return a.thumbnailUrl; const root = apiBase.replace(/\/api\/?$/, ''); return `${root}${a.thumbnailUrl.startsWith('/') ? '' : '/'}${a.thumbnailUrl}`; }
 }
 
 @Component({
