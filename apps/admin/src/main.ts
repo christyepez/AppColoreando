@@ -54,6 +54,7 @@ const authGuard: CanActivateFn = () => {
 class ApiClient {
   private readonly http = inject(HttpClient);
   login(email: string, password: string) { return this.http.post<AuthResponse>(`${apiBase}/auth/login`, { email, password, deviceId: 'admin-web', deviceName: 'Angular Admin' }); }
+  devLogin() { return this.http.post<AuthResponse>(`${apiBase}/auth/dev-login`, {}); }
   metrics() { return this.http.get<Metrics>(`${apiBase}/admin/metrics`); }
   users() { return this.http.get<UserDto[]>(`${apiBase}/admin/users`); }
   updateUser(user: UserDto) { return this.http.put<UserDto>(`${apiBase}/admin/users/${user.id}`, { displayName: user.displayName, role: user.role, isActive: user.isActive }); }
@@ -78,6 +79,8 @@ class ApiClient {
         <label>Email<input [(ngModel)]="email" autocomplete="username"></label>
         <label>Password<input [(ngModel)]="password" type="password" autocomplete="current-password"></label>
         <button (click)="login()" [disabled]="busy()">Sign in</button>
+        <button *ngIf="isLocalDev" class="ghost" (click)="devLogin()" [disabled]="busy()">Entrar DEV local</button>
+        <small *ngIf="isLocalDev">Solo disponible en localhost con Development habilitado.</small>
         <p class="error" *ngIf="error()">{{error()}}</p>
       </section>
     </main>
@@ -89,6 +92,7 @@ class LoginComponent {
   private readonly router = inject(Router);
   email = 'admin@appcoloreando.local';
   password = '';
+  readonly isLocalDev = ['localhost', '127.0.0.1'].includes(window.location.hostname);
   readonly busy = signal(false);
   readonly error = signal('');
   login() {
@@ -97,6 +101,15 @@ class LoginComponent {
     this.api.login(this.email, this.password).subscribe({
       next: auth => { this.session.set(auth); void this.router.navigateByUrl('/'); },
       error: (e: HttpErrorResponse) => { this.error.set(e.status === 401 ? 'Invalid credentials' : 'Login failed'); this.busy.set(false); }
+    });
+  }
+
+  devLogin() {
+    this.busy.set(true);
+    this.error.set('');
+    this.api.devLogin().subscribe({
+      next: auth => { this.session.set(auth); void this.router.navigateByUrl('/'); },
+      error: () => { this.error.set('DEV local login is not enabled'); this.busy.set(false); }
     });
   }
 }
