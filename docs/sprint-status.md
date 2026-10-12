@@ -96,12 +96,12 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Near-duplicate hues gain value separation to improve paint-number readability without aggressive recoloring.
 - Validation includes deterministic palette and neutral-preservation coverage.
 
-## S35 � Intelligent Number Placement � Complete
+## S35 — Intelligent Number Placement — Complete
 - Number scale now uses the actual inscribed label radius and digit count, reducing labels that collide with region boundaries.
 - Existing zoom visibility metadata remains backward-compatible.
 - Validation covered by Visual Processor tests.
 
-## S36 � Photo to Illustration Preprocessing � Complete
+## S36 — Photo to Illustration Preprocessing — Complete
 - Added deterministic mean-shift plus bilateral preprocessing before LAB segmentation.
 - Smoothing strength scales by difficulty, with stronger simplification for Kids/Easy and greater detail preservation for Detailed/Master.
 - No external AI/model dependency was introduced; bundle contracts remain unchanged.
@@ -228,3 +228,19 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Final gates: backend Release 0 warnings/errors, Flutter 22/22, visual processor 25/25, admin build/audit clean.
 - Final Web Release and Android AAB regenerated; AAB is 49.9 MB.
 - Production merge/tag/deployment/store submission intentionally remain unexecuted pending explicit approval.
+
+
+## S55 — Development Admin Recovery Hardening — Complete
+- Added development-only one-time administrator credential recovery.
+- Recovery remains explicitly disabled unless the local compose flag is enabled.
+- Production behavior and stored credentials remain unchanged.
+
+## S56 — Premium Visual Engine — Complete
+- Raised the supported palette ceiling from 24 to 150 colors.
+- Raised generated-artwork complexity to a maximum of 2,500 playable regions.
+- High-K clustering uses deterministic spatial sampling for centroid discovery and bounded full-image classification.
+- Removed inactive palette entries after smoothing/micro-region merging so every published color maps to playable content.
+- Corrected Visual QA auto-repair issue-code mapping for contour complexity and label clearance.
+- Processor API rejects requests beyond 2,500 regions or 150 colors and reports engine `s56-premium-visual-engine`.
+- Angular production dependencies upgraded to patched 20.3.33 after the October 2026 router advisory surfaced in CI.
+- Validation: Backend build/tests PASS; Angular production build + production dependency audit PASS; Visual Processor regression tests PASS; Visual Processor Docker image build PASS in GitHub Actions.
