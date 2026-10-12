@@ -60,6 +60,7 @@ services:
       Seed__AdminEmail: ${SEED__ADMINEMAIL:-}
       Seed__AdminPassword: ${SEED__ADMINPASSWORD:-}
       Seed__ResetAdminPassword: ${SEED__RESETADMINPASSWORD:-false}
+      Seed__EnableDevAdminLogin: ${SEED__ENABLEDEVADMINLOGIN:-false}
       RabbitMQ__Host: rabbitmq
       RabbitMQ__User: ${RABBITMQ_USER:-appcoloreando}
       RabbitMQ__Password: ${RABBITMQ_PASSWORD}
