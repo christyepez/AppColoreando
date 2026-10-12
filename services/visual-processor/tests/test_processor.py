@@ -349,7 +349,7 @@ def test_visual_qa_v2_emits_quality_metrics(tmp_path: Path) -> None:
 def test_repair_options_reduce_complexity_for_quality_issues() -> None:
     from app.processor import _repair_options
     base = _options()
-    qa = {"issues": [{"code": "QA_MICRO_REGIONS"}, {"code": "QA_LABEL_CRAMPED"}, {"code": "QA_PALETTE_DELTA"}]}
+    qa = {"issues": [{"code": "QA_MICRO_REGIONS"}, {"code": "QA_LABEL_CLEARANCE"}, {"code": "QA_CONTOUR_COMPLEXITY"}, {"code": "QA_PALETTE_DELTA"}]}
     repaired = _repair_options(base, qa)
     assert repaired.target_regions < base.target_regions
     assert repaired.max_colors < base.max_colors
@@ -366,3 +366,81 @@ def test_auto_repair_only_accepts_improvement(tmp_path: Path) -> None:
     info = result["autoRepair"]
     assert info["finalScore"] >= info["baselineScore"]
     assert (output / "manifest.json").exists()
+
+def test_premium_variant_scales_to_happy_color_class_limits() -> None:
+    from app.processor import _variant_options
+    base = replace(_options(), target_regions=1000, max_colors=100)
+    master = _variant_options(base, "Master")
+    assert master.target_regions == 2500
+    assert master.max_colors == 150
+
+
+def test_variant_options_never_exceed_runtime_limits() -> None:
+    from app.processor import _variant_options
+    base = replace(_options(), target_regions=5000, max_colors=500)
+    for difficulty in ("Kids", "Easy", "Normal", "Detailed", "Master"):
+        variant = _variant_options(base, difficulty)
+        assert 12 <= variant.target_regions <= 2500
+        assert 4 <= variant.max_colors <= 150
+
+
+def test_cluster_colors_supports_more_than_24_colors() -> None:
+    width = 90
+    swatches = np.zeros((30, width, 3), dtype=np.uint8)
+    for idx in range(30):
+        hsv = np.uint8([[[idx * 6 % 180, 210, 220]]])
+        bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)[0, 0]
+        swatches[:, idx * 3:(idx + 1) * 3] = bgr
+    lab = cv2.cvtColor(swatches, cv2.COLOR_BGR2LAB)
+    labels, centers = _cluster_colors(lab, 30, "Master")
+    assert labels.shape == lab.shape[:2]
+    assert len(centers) == 30
+    assert len(np.unique(labels)) >= 24
+
+
+def test_compact_labels_removes_unused_palette_entries() -> None:
+    from app.processor import _compact_labels_and_centers
+    labels = np.array([[0, 0, 2], [2, 4, 4]], dtype=np.int32)
+    centers = np.array([
+        [100, 120, 130],
+        [110, 120, 130],
+        [140, 150, 160],
+        [170, 180, 190],
+        [200, 140, 110],
+    ], dtype=np.uint8)
+    compact_labels, compact_centers = _compact_labels_and_centers(labels, centers)
+    assert len(compact_centers) == 3
+    assert np.array_equal(np.unique(compact_labels), np.array([0, 1, 2]))
+    assert np.array_equal(compact_centers, centers[[0, 2, 4]])
+
+
+def test_process_request_enforces_premium_limits() -> None:
+    from pydantic import ValidationError
+    from app.main import ProcessRequest
+
+    base = {
+        "jobId": "00000000-0000-0000-0000-000000000001",
+        "sourcePath": "/tmp/source.png",
+        "presetCode": "natural",
+        "difficulty": "Master",
+        "targetRegions": 2500,
+        "maxColors": 150,
+        "simplificationTolerance": 0.22,
+        "edgeSensitivity": 0.7,
+        "curveSmoothness": 0.8,
+        "saturationBoost": 0.18,
+        "contrastBoost": 0.1,
+    }
+    accepted = ProcessRequest(**base)
+    assert accepted.targetRegions == 2500
+    assert accepted.maxColors == 150
+
+    for field, value in (("targetRegions", 2501), ("maxColors", 151)):
+        payload = dict(base)
+        payload[field] = value
+        try:
+            ProcessRequest(**payload)
+        except ValidationError:
+            pass
+        else:
+            raise AssertionError(f"{field} should reject values above the premium limit")

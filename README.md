@@ -1,6 +1,6 @@
 # AppColoreando
 
-Plataforma de coloreado por nÃºmeros con aplicaciÃ³n mÃ³vil, portal administrativo y backend centralizado.
+Plataforma de coloreado por números con aplicación móvil, portal administrativo y backend centralizado.
 
 ## Stack
 - Mobile: Flutter
@@ -14,15 +14,15 @@ Plataforma de coloreado por nÃºmeros con aplicaciÃ³n mÃ³vil, portal admini
 
 ## Core capabilities
 - Registro/login de usuarios y roles
-- CatÃ¡logo administrable de ilustraciones, categorÃ­as, colecciones y licencias
+- Catálogo administrable de ilustraciones, categorías, colecciones y licencias
 - Contenido personalizado por usuario
-- Progreso de coloreado y sincronizaciÃ³n
+- Progreso de coloreado y sincronización
 - Favoritos, historial y actividad
-- MÃ©tricas de uso por usuario
-- AuditorÃ­a tÃ©cnica y funcional
+- Métricas de uso por usuario
+- Auditoría tÃ©cnica y funcional
 - Portal administrativo
 - API documentada con OpenAPI
-- PreparaciÃ³n para Android/iOS
+- Preparación para Android/iOS
 
 ## Repository layout
 - `backend/`: API, Application, Domain, Infrastructure y tests
@@ -44,7 +44,7 @@ Servicios previstos:
 - Redis: `localhost:6379`
 - MinIO: `http://localhost:9001`
 
-> Las franquicias comerciales (Disney, Pixar, Paw Patrol, Bluey, Dragon Ball, Saint Seiya, Transformers, He-Man, etc.) deben cargarse Ãºnicamente cuando existan los derechos/licencias correspondientes. La plataforma modela esos derechos desde el inicio.
+> Las franquicias comerciales (Disney, Pixar, Paw Patrol, Bluey, Dragon Ball, Saint Seiya, Transformers, He-Man, etc.) deben cargarse únicamente cuando existan los derechos/licencias correspondientes. La plataforma modela esos derechos desde el inicio.
 
 ## Release and validation
 
