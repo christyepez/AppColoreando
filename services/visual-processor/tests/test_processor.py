@@ -349,7 +349,7 @@ def test_visual_qa_v2_emits_quality_metrics(tmp_path: Path) -> None:
 def test_repair_options_reduce_complexity_for_quality_issues() -> None:
     from app.processor import _repair_options
     base = _options()
-    qa = {"issues": [{"code": "QA_MICRO_REGIONS"}, {"code": "QA_LABEL_CRAMPED"}, {"code": "QA_PALETTE_DELTA"}]}
+    qa = {"issues": [{"code": "QA_MICRO_REGIONS"}, {"code": "QA_LABEL_CLEARANCE"}, {"code": "QA_CONTOUR_COMPLEXITY"}, {"code": "QA_PALETTE_DELTA"}]}
     repaired = _repair_options(base, qa)
     assert repaired.target_regions < base.target_regions
     assert repaired.max_colors < base.max_colors
@@ -396,3 +396,19 @@ def test_cluster_colors_supports_more_than_24_colors() -> None:
     assert labels.shape == lab.shape[:2]
     assert len(centers) == 30
     assert len(np.unique(labels)) >= 24
+
+
+def test_compact_labels_removes_unused_palette_entries() -> None:
+    from app.processor import _compact_labels_and_centers
+    labels = np.array([[0, 0, 2], [2, 4, 4]], dtype=np.int32)
+    centers = np.array([
+        [100, 120, 130],
+        [110, 120, 130],
+        [140, 150, 160],
+        [170, 180, 190],
+        [200, 140, 110],
+    ], dtype=np.uint8)
+    compact_labels, compact_centers = _compact_labels_and_centers(labels, centers)
+    assert len(compact_centers) == 3
+    assert np.array_equal(np.unique(compact_labels), np.array([0, 1, 2]))
+    assert np.array_equal(compact_centers, centers[[0, 2, 4]])
