@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from app.processor import ProcessorOptions, process_image, process_image_auto_repair, process_variants
 
-app = FastAPI(title="AppColoreando Visual Processor", version="0.16.0")
+app = FastAPI(title="AppColoreando Visual Processor", version="0.17.0")
 OUTPUT_ROOT = Path("/content-data/generation-jobs")
 
 
@@ -34,9 +34,22 @@ class ProcessRequest(BaseModel):
     generateVariants: bool = True
     artStyle: str = Field(default="auto", min_length=1, max_length=32)
     semanticHints: list[SemanticHint] = Field(default_factory=list)
+THEME_PRESET_CODES = {
+    "animals", "landscape", "botanical", "food",
+    "vehicles", "space", "underwater", "architecture",
+}
+
+def _resolve_request_art_style(preset_code: str, requested: str) -> str:
+    normalized = (requested or "auto").strip().lower()
+    if normalized != "auto":
+        return normalized
+    preset = (preset_code or "").strip().lower()
+    return preset if preset in THEME_PRESET_CODES else "auto"
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "healthy", "engine": "s56-premium-visual-engine"}
+    return {"status": "healthy", "engine": "s65-photo-adaptive-engine"}
 
 
 @app.post("/process")
@@ -61,7 +74,7 @@ def process(request: ProcessRequest) -> dict:
         contrast_boost=request.contrastBoost,
         difficulty=request.difficulty,
         style_code=request.presetCode,
-        art_style=request.artStyle,
+        art_style=_resolve_request_art_style(request.presetCode, request.artStyle),
         semantic_hints=tuple(h.model_dump() for h in request.semanticHints),
     )
     try:
