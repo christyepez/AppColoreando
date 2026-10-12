@@ -46,3 +46,17 @@ Remaining external blockers:
 Create `.env` from `.env.example` and use strong local values. Production values belong in the target secret store/CI environment, never Git.
 
 Required runtime secrets include PostgreSQL password, JWT signing key, RabbitMQ password, MinIO credentials and any opt-in seed administrator password.
+
+
+## S56 source validation
+
+Validated in GitHub Actions on 2026-10-12:
+
+- ASP.NET Core .NET 10 restore/build/tests: PASS.
+- Angular Admin production build: PASS.
+- Angular production dependency audit: PASS after upgrading Angular runtime/compiler packages to 20.3.33.
+- Visual Processor pytest regression suite: PASS.
+- Visual Processor Docker image build: PASS.
+- Premium engine contract: maximum 150 colors and 2,500 regions, with deterministic high-K clustering and compact active palettes.
+
+Local Docker/Android/Web smoke validation remains an environment execution step when an authorized workstation is online; it does not change source readiness.
