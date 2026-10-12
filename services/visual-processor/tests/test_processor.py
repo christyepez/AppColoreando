@@ -412,3 +412,35 @@ def test_compact_labels_removes_unused_palette_entries() -> None:
     assert len(compact_centers) == 3
     assert np.array_equal(np.unique(compact_labels), np.array([0, 1, 2]))
     assert np.array_equal(compact_centers, centers[[0, 2, 4]])
+
+
+def test_process_request_enforces_premium_limits() -> None:
+    from pydantic import ValidationError
+    from app.main import ProcessRequest
+
+    base = {
+        "jobId": "00000000-0000-0000-0000-000000000001",
+        "sourcePath": "/tmp/source.png",
+        "presetCode": "natural",
+        "difficulty": "Master",
+        "targetRegions": 2500,
+        "maxColors": 150,
+        "simplificationTolerance": 0.22,
+        "edgeSensitivity": 0.7,
+        "curveSmoothness": 0.8,
+        "saturationBoost": 0.18,
+        "contrastBoost": 0.1,
+    }
+    accepted = ProcessRequest(**base)
+    assert accepted.targetRegions == 2500
+    assert accepted.maxColors == 150
+
+    for field, value in (("targetRegions", 2501), ("maxColors", 151)):
+        payload = dict(base)
+        payload[field] = value
+        try:
+            ProcessRequest(**payload)
+        except ValidationError:
+            pass
+        else:
+            raise AssertionError(f"{field} should reject values above the premium limit")
