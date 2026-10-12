@@ -1,5 +1,7 @@
+using System.Security.Claims;
 using System.Text;
 using AppColoreando.Application;
+using AppColoreando.Application.Abstractions;
 using AppColoreando.Infrastructure;
 using AppColoreando.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -51,6 +53,23 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJw
         ValidAudience = jwtAudience,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
         ClockSkew = TimeSpan.FromMinutes(1)
+    };
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            var subject = context.Principal?.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (!Guid.TryParse(subject, out var userId))
+            {
+                context.Fail("Invalid user identifier.");
+                return;
+            }
+
+            var users = context.HttpContext.RequestServices.GetRequiredService<IUserRepository>();
+            var user = await users.GetByIdAsync(userId, context.HttpContext.RequestAborted);
+            if (user is null || !user.IsActive)
+                context.Fail("Account is inactive or no longer exists.");
+        }
     };
 });
 builder.Services.AddAuthorizationBuilder().AddPolicy("AdminOnly", policy => policy.RequireRole("Admin"));

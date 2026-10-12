@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using AppColoreando.Application.Abstractions;
 using AppColoreando.Application.Contracts;
 using Microsoft.AspNetCore.Authorization;
@@ -9,7 +10,7 @@ namespace AppColoreando.Api.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/me")]
-public sealed class UserContentController(IUserContentService service, IUserAccountService accounts, IAuthService auth) : ControllerBase
+public sealed class UserContentController(IUserContentService service, IUserAccountService accounts, IAuthService auth, IAccountPrivacyService privacy) : ControllerBase
 {
     [HttpGet("profile")]
     public async Task<IActionResult> GetProfile(CancellationToken ct) => Ok(await accounts.GetProfileAsync(UserId(), ct));
@@ -51,6 +52,22 @@ public sealed class UserContentController(IUserContentService service, IUserAcco
 
     [HttpGet("achievements")]
     public async Task<IActionResult> GetAchievements(CancellationToken ct) => Ok(await service.GetAchievementsAsync(UserId(), ct));
+
+    [HttpGet("account/export")]
+    public async Task<IActionResult> ExportAccount(CancellationToken ct)
+    {
+        var export = await privacy.ExportAsync(UserId(), ct);
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(export, new JsonSerializerOptions(JsonSerializerDefaults.Web) { WriteIndented = true });
+        return File(bytes, "application/json", $"appcoloreando-account-export-{DateTime.UtcNow:yyyyMMdd}.json");
+    }
+
+    [HttpDelete("account")]
+    public async Task<IActionResult> DeleteAccount(DeleteAccountRequest request, CancellationToken ct)
+    {
+        if (!request.Confirm) return BadRequest(new ProblemDetails { Title = "Account deletion requires explicit confirmation." });
+        await privacy.DeleteAsync(UserId(), ct);
+        return NoContent();
+    }
 
     private Guid UserId() => Guid.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 }

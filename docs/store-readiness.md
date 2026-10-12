@@ -14,7 +14,11 @@
 - UserDefaults required-reason declaration uses CA92.1 for app-local preferences.
 - Signing/team/provisioning profiles are intentionally not committed.
 ## Store metadata / privacy
-- Prepare a public privacy-policy URL before production submission.
+- Public privacy-policy baseline: `https://github.com/christyepez/AppColoreando/blob/main/docs/privacy-policy.md`.
+- Public support baseline: `https://github.com/christyepez/AppColoreando/blob/main/docs/support.md` and issue intake at `https://github.com/christyepez/AppColoreando/issues`.
+- Authenticated end-user export is available at `GET /api/me/account/export`; self-deletion is available at `DELETE /api/me/account` with explicit confirmation.
+- Account deletion is transactional, removes account-linked personal data, dissociates audit records and invalidates later authenticated requests because JWT validation checks that the account still exists and is active.
+- Privileged editorial/administrative accounts cannot self-delete.
 - Complete Google Play Data safety for account/profile, progress, favorites, telemetry and diagnostics actually collected by production builds.
 - Complete App Store App Privacy answers for the same production behavior and third-party SDKs.
 - Do not claim tracking: current first-party telemetry is allow-listed and designed without advertising identifiers.
