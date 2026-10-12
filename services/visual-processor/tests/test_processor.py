@@ -474,3 +474,36 @@ def test_region_limit_merges_smallest_components_to_target() -> None:
 
     assert len(_region_component_areas(limited, len(centers))) <= 4
     assert limited.shape == labels.shape
+
+def test_source_complexity_distinguishes_flat_from_busy_image() -> None:
+    from app.processor import _source_complexity
+    flat = np.full((256, 256, 3), 180, dtype=np.uint8)
+    rng = np.random.default_rng(42)
+    busy = rng.integers(0, 256, size=(256, 256, 3), dtype=np.uint8)
+    assert _source_complexity(flat) < 0.05
+    assert _source_complexity(busy) > _source_complexity(flat) + 0.45
+
+
+def test_extended_art_styles_resolve_for_family_categories() -> None:
+    from app.processor import _resolve_art_style
+    cases = {
+        "landscape": ({"tag": "mountain", "role": "environment"},),
+        "botanical": ({"tag": "flower", "role": "subject"},),
+        "food": ({"tag": "food", "role": "subject"},),
+        "vehicles": ({"tag": "car", "role": "subject"},),
+        "space": ({"tag": "planet", "role": "subject"},),
+        "underwater": ({"tag": "coral", "role": "environment"},),
+    }
+    for expected, hints in cases.items():
+        assert _resolve_art_style("auto", hints) == expected
+
+
+def test_adaptive_preprocess_simplifies_busy_photos_more_for_kids() -> None:
+    from app.processor import _illustration_preprocess
+    rng = np.random.default_rng(7)
+    image = rng.integers(0, 256, size=(320, 320, 3), dtype=np.uint8)
+    kids = _illustration_preprocess(image, "Kids", "natural")
+    master = _illustration_preprocess(image, "Master", "natural")
+    kids_edges = np.mean(cv2.Canny(cv2.cvtColor(kids, cv2.COLOR_BGR2GRAY), 55, 135) > 0)
+    master_edges = np.mean(cv2.Canny(cv2.cvtColor(master, cv2.COLOR_BGR2GRAY), 55, 135) > 0)
+    assert kids_edges < master_edges

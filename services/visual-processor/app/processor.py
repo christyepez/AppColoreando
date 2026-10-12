@@ -67,7 +67,7 @@ def _resize_for_processing(image: np.ndarray, max_side: int = 1024) -> np.ndarra
 
 def _resolve_art_style(requested: str, semantic_hints: tuple[dict, ...]) -> str:
     normalized = (requested or "auto").strip().lower()
-    aliases = {"animal": "animals", "animals": "animals", "portraiture": "portrait", "portrait": "portrait", "fantasy": "fantasy", "nature": "nature", "architecture": "architecture", "mandala": "mandala", "kawaii": "kawaii", "natural": "natural"}
+    aliases = {"animal": "animals", "animals": "animals", "portraiture": "portrait", "portrait": "portrait", "fantasy": "fantasy", "nature": "nature", "landscape": "landscape", "botanical": "botanical", "flowers": "botanical", "flower": "botanical", "food": "food", "vehicle": "vehicles", "vehicles": "vehicles", "space": "space", "sci-fi": "space", "underwater": "underwater", "architecture": "architecture", "mandala": "mandala", "kawaii": "kawaii", "natural": "natural"}
     if normalized != "auto":
         return aliases.get(normalized, "natural")
     tokens = " ".join(str(h.get("tag", "")) + " " + str(h.get("role", "")) for h in semantic_hints).lower()
@@ -78,7 +78,13 @@ def _resolve_art_style(requested: str, semantic_hints: tuple[dict, ...]) -> str:
         ("mandala", ("mandala", "ornament", "pattern", "geometric")),
         ("kawaii", ("kawaii", "cute", "chibi")),
         ("fantasy", ("fantasy", "dragon", "magic", "fairy", "myth")),
-        ("nature", ("nature", "flower", "plant", "tree", "landscape", "forest")),
+        ("space", ("space", "planet", "galaxy", "nebula", "moon", "astronaut", "cosmos")),
+        ("underwater", ("underwater", "coral", "ocean", "sea", "reef", "marine")),
+        ("vehicles", ("vehicle", "car", "truck", "train", "aircraft", "motorcycle", "bicycle")),
+        ("food", ("food", "fruit", "dessert", "meal", "vegetable", "drink")),
+        ("botanical", ("flower", "plant", "botanical", "blossom", "garden")),
+        ("landscape", ("landscape", "mountain", "forest", "valley", "lake", "river", "beach", "sky")),
+        ("nature", ("nature", "tree", "wildlife")),
     )
     for style, keywords in rules:
         if any(keyword in tokens for keyword in keywords):
@@ -90,6 +96,12 @@ def _art_style_profile(style: str) -> dict[str, float]:
     return {
         "natural": {"smooth": 1.0, "saturation": 1.0, "brightness": 1.0},
         "nature": {"smooth": 0.95, "saturation": 1.08, "brightness": 1.01},
+        "landscape": {"smooth": 0.92, "saturation": 1.10, "brightness": 1.02},
+        "botanical": {"smooth": 0.90, "saturation": 1.16, "brightness": 1.03},
+        "food": {"smooth": 1.02, "saturation": 1.12, "brightness": 1.04},
+        "vehicles": {"smooth": 0.80, "saturation": 1.05, "brightness": 1.00},
+        "space": {"smooth": 0.86, "saturation": 1.22, "brightness": 0.92},
+        "underwater": {"smooth": 0.94, "saturation": 1.16, "brightness": 0.98},
         "animals": {"smooth": 0.92, "saturation": 1.06, "brightness": 1.01},
         "portrait": {"smooth": 1.10, "saturation": 0.96, "brightness": 1.03},
         "architecture": {"smooth": 0.82, "saturation": 0.94, "brightness": 1.00},
@@ -111,6 +123,16 @@ def _apply_art_palette(palette: list[str], art_style: str) -> list[str]:
         result.append(_hex_from_bgr(cv2.cvtColor(np.uint8([[hsv]]), cv2.COLOR_HSV2BGR)[0, 0]))
     return result
 
+def _source_complexity(image: np.ndarray) -> float:
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    edge = cv2.Canny(gray, 55, 135)
+    edge_density = float(np.mean(edge > 0))
+    hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+    saturation_spread = float(np.std(hsv[:, :, 1])) / 96.0
+    luminance_spread = float(np.std(gray)) / 72.0
+    return float(np.clip(0.55 * min(1.0, edge_density / 0.18) + 0.25 * min(1.0, saturation_spread) + 0.20 * min(1.0, luminance_spread), 0.0, 1.0))
+
+
 def _illustration_preprocess(image: np.ndarray, difficulty: str, art_style: str = "natural") -> np.ndarray:
     strength = {
         "kids": (13, 22), "easy": (11, 20), "normal": (9, 18),
@@ -118,8 +140,14 @@ def _illustration_preprocess(image: np.ndarray, difficulty: str, art_style: str 
     }.get(difficulty.lower(), (9, 18))
     spatial_radius, color_radius = strength
     smooth = _art_style_profile(art_style)["smooth"]
-    spatial_radius = max(3, int(round(spatial_radius * smooth)))
-    color_radius = max(6, int(round(color_radius * smooth)))
+    complexity = _source_complexity(image)
+    complexity_gain = {
+        "kids": 0.52, "easy": 0.38, "normal": 0.22,
+        "detailed": 0.10, "master": 0.04,
+    }.get(difficulty.lower(), 0.22)
+    adaptive = 1.0 + complexity * complexity_gain
+    spatial_radius = max(3, int(round(spatial_radius * smooth * adaptive)))
+    color_radius = max(6, int(round(color_radius * smooth * adaptive)))
     illustrated = cv2.pyrMeanShiftFiltering(image, spatial_radius, color_radius, maxLevel=1)
     illustrated = cv2.bilateralFilter(illustrated, 7, 32, 32)
     return illustrated
@@ -217,10 +245,11 @@ def _cluster_colors(lab: np.ndarray, color_count: int, difficulty: str = "Normal
     for start in range(0, len(features), chunk_size):
         stop = min(len(features), start + chunk_size)
         chunk = features[start:stop]
-        distances = np.sum(
-            (chunk[:, None, :] - feature_centers[None, :, :]) ** 2,
-            axis=2,
-        )
+        # Squared Euclidean distance via dot products avoids allocating a
+        # chunk x colors x features tensor at premium palette sizes.
+        chunk_sq = np.sum(chunk * chunk, axis=1, keepdims=True)
+        center_sq = np.sum(feature_centers * feature_centers, axis=1, keepdims=True).T
+        distances = chunk_sq + center_sq - 2.0 * (chunk @ feature_centers.T)
         flat_labels[start:stop] = np.argmin(distances, axis=1).astype(np.int32)
     labels = flat_labels.reshape((height, width))
 
@@ -828,6 +857,7 @@ def _write_svg(path: Path, regions: list[Region], palette: list[str], line_art: 
 
 def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions) -> dict:
     image = _resize_for_processing(_read_image(source_path))
+    source_complexity = _source_complexity(image)
     resolved_art_style = _resolve_art_style(options.art_style, options.semantic_hints)
     illustrated = _illustration_preprocess(image, options.difficulty, resolved_art_style)
     lab = _preprocess(illustrated, options.edge_sensitivity)
@@ -905,6 +935,7 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
     qa = _build_qa_report(
         regions, centers, labels.shape, options, playable_area, image_area, semantic_counts
     )
+    qa["sourceComplexity"] = round(source_complexity, 4)
     playable_bundle = {
         "schemaVersion": "2.2",
         "width": int(labels.shape[1]),
