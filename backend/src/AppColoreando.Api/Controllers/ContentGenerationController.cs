@@ -13,7 +13,7 @@ public sealed class ContentGenerationController(IContentGenerationService servic
 {
     [HttpPost("source-assets")]
     [RequestSizeLimit(25 * 1024 * 1024)]
-    public async Task<IActionResult> UploadSourceAsset([FromForm] IFormFile file, CancellationToken ct)
+    public async Task<IActionResult> UploadSourceAsset(IFormFile file, CancellationToken ct)
     {
         await using var stream = file.OpenReadStream();
         var result = await service.UploadSourceAssetAsync(

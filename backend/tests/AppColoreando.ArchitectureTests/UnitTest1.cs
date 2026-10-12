@@ -41,3 +41,21 @@ public class LayerDependencyTests
         Assert.Empty(forbidden);
     }
 }
+
+
+public class ApiContractGuardrailTests
+{
+    [Fact]
+    public void File_upload_actions_must_not_apply_FromForm_directly_to_IFormFile()
+    {
+        var upload = typeof(AppColoreando.Api.Controllers.ContentGenerationController)
+            .GetMethod("UploadSourceAsset", BindingFlags.Public | BindingFlags.Instance)!;
+        var file = upload.GetParameters()
+            .Single(p => p.ParameterType == typeof(Microsoft.AspNetCore.Http.IFormFile));
+
+        var hasFromForm = file.GetCustomAttributes(inherit: true)
+            .Any(a => a.GetType().FullName == "Microsoft.AspNetCore.Mvc.FromFormAttribute");
+
+        Assert.False(hasFromForm);
+    }
+}
