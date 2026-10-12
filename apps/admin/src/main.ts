@@ -13,7 +13,8 @@ type UserDto = { id: string; email: string; displayName: string; role: string; i
 type Metrics = { users: number; publishedArtworks: number; completions: number; activityEvents: number };
 type Category = { id: string; name: string; slug: string; isActive: boolean };
 type Country = { id: string; code: string; name: string; isActive: boolean };
-type Artwork = { id: string; title: string; countryCode?: string; difficulty: number; regionCount: number; publishingStatus: string; thumbnailUrl?: string };\ntype Collection = { id: string; name: string; slug: string; description?: string; artworkCount: number; isActive: boolean };
+type Artwork = { id: string; title: string; countryCode?: string; difficulty: number; regionCount: number; publishingStatus: string; thumbnailUrl?: string };
+type Collection = { id: string; name: string; slug: string; description?: string; artworkCount: number; isActive: boolean };
 type Page<T> = { items: T[]; page: number; pageSize: number; total: number };
 
 @Injectable({ providedIn: 'root' })
@@ -168,12 +169,14 @@ class DashboardComponent { readonly metrics = signal<Metrics | null>(null); cons
 class ContentComponent {
   private readonly api = inject(ApiClient);
   readonly categories = signal<Category[]>([]);
+  readonly collections = signal<Collection[]>([]);
   readonly artworks = signal<Artwork[]>([]);
   categoryName = ''; categorySlug = ''; countryCode = ''; countryName = '';
   constructor() { this.reload(); }
   reload() { this.api.categories().subscribe(x => this.categories.set(x)); this.api.collections().subscribe(x => this.collections.set(x)); this.api.artworks().subscribe(x => this.artworks.set(x.items)); }
   createCategory() { this.api.createCategory(this.categoryName, this.categorySlug).subscribe(() => this.reload()); }
   saveCountry() { this.api.upsertCountry(this.countryCode, this.countryName).subscribe(() => { this.countryCode = ''; this.countryName = ''; }); }
+  thumbnail(a: Artwork) { if (!a.thumbnailUrl) return ''; if (/^https?:\/\//.test(a.thumbnailUrl)) return a.thumbnailUrl; const root = apiBase.replace(/\/api\/?$/, ''); return `${root}${a.thumbnailUrl.startsWith('/') ? '' : '/'}${a.thumbnailUrl}`; }
 }
 
 @Component({
