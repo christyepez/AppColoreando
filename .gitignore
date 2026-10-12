@@ -16,3 +16,4 @@
 
 # Local Docker Hub deployment secrets
 .env.hub
+content-seed/public-domain/
