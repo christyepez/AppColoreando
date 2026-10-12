@@ -14,6 +14,18 @@ public sealed record AuthResponse(string AccessToken, string RefreshToken, DateT
 public sealed record UserProfileDto(string Locale, bool KidsModeEnabled, bool SoundEnabled, bool HapticsEnabled, string DifficultyPreference, string ThemePreference);
 public sealed record UpdateProfileRequest(string DisplayName, string Locale, bool KidsModeEnabled, bool SoundEnabled, bool HapticsEnabled, string DifficultyPreference, string ThemePreference);
 public sealed record UserSessionDto(Guid Id, string DeviceId, string DeviceName, DateTime ExpiresAtUtc, DateTime? RevokedAtUtc, DateTime CreatedAtUtc);
+public sealed record DeleteAccountRequest(bool Confirm);
+public sealed record AccountDataExportDto(
+    DateTime ExportedAtUtc,
+    UserDto User,
+    UserProfileDto Profile,
+    IReadOnlyCollection<ProgressDto> Progress,
+    UserLibraryResponse Library,
+    IReadOnlyCollection<UserActivityDto> Activity,
+    UserMetricsResponse Metrics,
+    UserAchievementSummary Achievements,
+    IReadOnlyCollection<UserSessionDto> Sessions,
+    MonetizationEntitlementsResponse Entitlements);
 
 public sealed record CategoryDto(Guid Id, string Name, string Slug, bool IsActive);
 public sealed record CreateCategoryRequest(string Name, string Slug, bool IsActive = true);

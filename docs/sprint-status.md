@@ -244,3 +244,28 @@ Validation: .NET Release build 0 warnings/0 errors; backend 20/20 tests pass; An
 - Processor API rejects requests beyond 2,500 regions or 150 colors and reports engine `s56-premium-visual-engine`.
 - Angular production dependencies upgraded to patched 20.3.33 after the October 2026 router advisory surfaced in CI.
 - Validation: Backend build/tests PASS; Angular production build + production dependency audit PASS; Visual Processor regression tests PASS; Visual Processor Docker image build PASS in GitHub Actions.
+
+
+## S57 — Premium Region Cap / Upload Contract — Complete
+- Swagger file-upload contract corrected for source asset uploads with regression coverage.
+- Final playable-region cap is enforced after segmentation so premium generation cannot exceed 2,500 regions.
+- Validation: GitHub CI SUCCESS.
+
+## S58 — Premium Region-Cap Performance — Complete
+- Region-cap neighbour scans are localized to component bounding boxes.
+- Preserves the S57 hard cap while reducing unnecessary full-image neighbour work.
+- Validation: GitHub CI SUCCESS and local processor smoke QA 100.
+
+## S59 — Approval-Only Publishing — Complete
+- Generated artwork publishing now requires explicit `GenerationJobStatus.Approved`.
+- PreviewReady, NeedsReview and already Published jobs cannot bypass the editorial gate.
+- Regression coverage added; GitHub CI and both local Docker environments validated.
+
+## S60 — Account Privacy / Store Compliance — Complete
+- Added authenticated `GET /api/me/account/export` machine-readable account export.
+- Added authenticated `DELETE /api/me/account` with explicit confirmation for regular end-user accounts.
+- Personal-data deletion is transactional and removes user/profile, refresh tokens, progress, sync operations, achievements, activity/telemetry and daily metrics; audit records are dissociated.
+- Privileged Admin/ContentManager/Analyst accounts cannot self-delete.
+- JWT validation now rejects deleted or inactive accounts immediately on subsequent authenticated requests.
+- Added repository-hosted privacy policy and support pages, exposed from mobile Settings.
+- Validation on trabajo: backend Release build 0 warnings/0 errors; Application 29/29 PASS; Architecture 4/4 PASS; Domain 2/2 PASS; Flutter analyze PASS; Flutter 22/22 PASS. IntegrationTests remain locally blocked by Windows Application Control and are delegated to GitHub CI.

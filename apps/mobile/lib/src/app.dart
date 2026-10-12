@@ -474,6 +474,16 @@ class SettingsPage extends ConsumerWidget {
       SegmentedButton<Locale>(segments: const [ButtonSegment(value: Locale('es'), label: Text('ES')), ButtonSegment(value: Locale('en'), label: Text('EN'))], selected: {locale}, onSelectionChanged: (value) => ref.read(localeProvider.notifier).state = value.single),
       const SizedBox(height: 18),
       const ListTile(leading: Icon(Icons.notifications_none_rounded), title: Text('Recordatorios'), subtitle: Text('Tu momento diario para colorear')),
+      const ListTile(
+        leading: Icon(Icons.privacy_tip_outlined),
+        title: Text('Privacidad'),
+        subtitle: SelectableText('https://github.com/christyepez/AppColoreando/blob/main/docs/privacy-policy.md'),
+      ),
+      const ListTile(
+        leading: Icon(Icons.support_agent_rounded),
+        title: Text('Soporte'),
+        subtitle: SelectableText('https://github.com/christyepez/AppColoreando/issues'),
+      ),
       ListTile(leading: const Icon(Icons.cloud_outlined), title: const Text('API'), subtitle: Text(config.apiBaseUrl)),
     ]);
   }

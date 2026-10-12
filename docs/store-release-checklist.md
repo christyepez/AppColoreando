@@ -28,7 +28,7 @@
 - Publish privacy policy and support contact URLs.
 - Prepare store descriptions, screenshots, icons and age-rating answers.
 - Complete Google Play Data Safety and Apple App Privacy declarations from actual telemetry/data use.
-- Confirm account deletion/export flows before store submission if account creation is enabled.
+- Account export/delete backend flows implemented and regression-tested; Settings exposes public privacy/support URLs. If end-user account login/creation is enabled in a future mobile build, surface these authenticated controls directly in-app before store submission.
 - Verify accessibility, localization and parental/kids-mode disclosures.
 
 ## Intellectual-property gate

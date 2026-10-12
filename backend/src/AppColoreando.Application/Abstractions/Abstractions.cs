@@ -133,6 +133,17 @@ public interface IUserAccountService
     Task<IReadOnlyCollection<UserSessionDto>> GetSessionsAsync(Guid userId, CancellationToken ct);
 }
 
+public interface IUserPrivacyRepository
+{
+    Task DeletePersonalDataAsync(Guid userId, CancellationToken ct);
+}
+
+public interface IAccountPrivacyService
+{
+    Task<AccountDataExportDto> ExportAsync(Guid userId, CancellationToken ct);
+    Task DeleteAsync(Guid userId, CancellationToken ct);
+}
+
 public interface ICatalogService
 {
     Task<ArtworkDto?> GetArtworkAsync(Guid id, CancellationToken ct);
