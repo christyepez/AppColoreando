@@ -444,3 +444,24 @@ def test_process_request_enforces_premium_limits() -> None:
             pass
         else:
             raise AssertionError(f"{field} should reject values above the premium limit")
+
+
+
+def test_region_limit_merges_smallest_components_to_target() -> None:
+    from app.processor import ProcessorOptions, _limit_region_count, _region_component_areas
+
+    labels = np.zeros((24, 40), dtype=np.int32)
+    stripe_width = 4
+    for stripe in range(10):
+        labels[:, stripe * stripe_width:(stripe + 1) * stripe_width] = stripe
+
+    centers = np.array(
+        [[20 + i * 18, 80 + (i * 11) % 90, 90 + (i * 17) % 100] for i in range(10)],
+        dtype=np.uint8,
+    )
+    options = ProcessorOptions(target_regions=4, max_colors=10, difficulty="Master")
+
+    limited = _limit_region_count(labels, centers, options)
+
+    assert len(_region_component_areas(limited, len(centers))) <= 4
+    assert limited.shape == labels.shape
