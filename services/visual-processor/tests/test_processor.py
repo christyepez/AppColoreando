@@ -366,3 +366,33 @@ def test_auto_repair_only_accepts_improvement(tmp_path: Path) -> None:
     info = result["autoRepair"]
     assert info["finalScore"] >= info["baselineScore"]
     assert (output / "manifest.json").exists()
+
+def test_premium_variant_scales_to_happy_color_class_limits() -> None:
+    from app.processor import _variant_options
+    base = replace(_options(), target_regions=1000, max_colors=100)
+    master = _variant_options(base, "Master")
+    assert master.target_regions == 2500
+    assert master.max_colors == 150
+
+
+def test_variant_options_never_exceed_runtime_limits() -> None:
+    from app.processor import _variant_options
+    base = replace(_options(), target_regions=5000, max_colors=500)
+    for difficulty in ("Kids", "Easy", "Normal", "Detailed", "Master"):
+        variant = _variant_options(base, difficulty)
+        assert 12 <= variant.target_regions <= 2500
+        assert 4 <= variant.max_colors <= 150
+
+
+def test_cluster_colors_supports_more_than_24_colors() -> None:
+    width = 90
+    swatches = np.zeros((30, width, 3), dtype=np.uint8)
+    for idx in range(30):
+        hsv = np.uint8([[[idx * 6 % 180, 210, 220]]])
+        bgr = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)[0, 0]
+        swatches[:, idx * 3:(idx + 1) * 3] = bgr
+    lab = cv2.cvtColor(swatches, cv2.COLOR_BGR2LAB)
+    labels, centers = _cluster_colors(lab, 30, "Master")
+    assert labels.shape == lab.shape[:2]
+    assert len(centers) == 30
+    assert len(np.unique(labels)) >= 24
