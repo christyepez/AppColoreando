@@ -459,7 +459,16 @@ def test_region_limit_merges_smallest_components_to_target() -> None:
         [[20 + i * 18, 80 + (i * 11) % 90, 90 + (i * 17) % 100] for i in range(10)],
         dtype=np.uint8,
     )
-    options = ProcessorOptions(target_regions=4, max_colors=10, difficulty="Master")
+    options = ProcessorOptions(
+        target_regions=4,
+        max_colors=10,
+        simplification_tolerance=0.2,
+        edge_sensitivity=0.7,
+        curve_smoothness=0.8,
+        saturation_boost=0.1,
+        contrast_boost=0.1,
+        difficulty="Master",
+    )
 
     limited = _limit_region_count(labels, centers, options)
 
