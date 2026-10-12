@@ -507,3 +507,12 @@ def test_adaptive_preprocess_simplifies_busy_photos_more_for_kids() -> None:
     kids_edges = np.mean(cv2.Canny(cv2.cvtColor(kids, cv2.COLOR_BGR2GRAY), 55, 135) > 0)
     master_edges = np.mean(cv2.Canny(cv2.cvtColor(master, cv2.COLOR_BGR2GRAY), 55, 135) > 0)
     assert kids_edges < master_edges
+
+
+def test_theme_preset_code_selects_art_style() -> None:
+    from app.main import _resolve_request_art_style
+
+    for code in ("animals", "landscape", "botanical", "food", "vehicles", "space", "underwater", "architecture"):
+        assert _resolve_request_art_style(code, "auto") == code
+    assert _resolve_request_art_style("natural", "auto") == "auto"
+    assert _resolve_request_art_style("space", "portrait") == "portrait"
