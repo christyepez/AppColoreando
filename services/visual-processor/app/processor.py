@@ -471,21 +471,10 @@ def _merge_micro_regions(labels: np.ndarray, centers: np.ndarray, options: Proce
                 area = int(stats[component_id, cv2.CC_STAT_AREA])
                 if area >= threshold:
                     continue
-                x = int(stats[component_id, cv2.CC_STAT_LEFT])
-                y = int(stats[component_id, cv2.CC_STAT_TOP])
-                width = int(stats[component_id, cv2.CC_STAT_WIDTH])
-                height = int(stats[component_id, cv2.CC_STAT_HEIGHT])
-                x0 = max(0, x - 1)
-                y0 = max(0, y - 1)
-                x1 = min(result.shape[1], x + width + 1)
-                y1 = min(result.shape[0], y + height + 1)
-
-                local_components = components[y0:y1, x0:x1]
-                component_mask = local_components == component_id
-                local_result = result[y0:y1, x0:x1]
+                component_mask = components == component_id
                 border = cv2.dilate(component_mask.astype(np.uint8), kernel, iterations=1).astype(bool)
                 border &= ~component_mask
-                neighbours = local_result[border]
+                neighbours = result[border]
                 neighbours = neighbours[neighbours != color_id]
                 if neighbours.size == 0:
                     continue
@@ -548,10 +537,21 @@ def _limit_region_count(labels: np.ndarray, centers: np.ndarray, options: Proces
                 if area > cutoff:
                     continue
 
-                component_mask = components == component_id
+                x = int(stats[component_id, cv2.CC_STAT_LEFT])
+                y = int(stats[component_id, cv2.CC_STAT_TOP])
+                width = int(stats[component_id, cv2.CC_STAT_WIDTH])
+                height = int(stats[component_id, cv2.CC_STAT_HEIGHT])
+                x0 = max(0, x - 1)
+                y0 = max(0, y - 1)
+                x1 = min(result.shape[1], x + width + 1)
+                y1 = min(result.shape[0], y + height + 1)
+
+                local_components = components[y0:y1, x0:x1]
+                component_mask = local_components == component_id
+                local_result = result[y0:y1, x0:x1]
                 border = cv2.dilate(component_mask.astype(np.uint8), kernel, iterations=1).astype(bool)
                 border &= ~component_mask
-                neighbours = result[border]
+                neighbours = local_result[border]
                 neighbours = neighbours[neighbours != color_id]
                 if neighbours.size == 0:
                     continue
