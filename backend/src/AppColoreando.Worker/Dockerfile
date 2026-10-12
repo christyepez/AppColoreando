@@ -6,9 +6,9 @@ COPY src/AppColoreando.Domain/AppColoreando.Domain.csproj src/AppColoreando.Doma
 COPY src/AppColoreando.Application/AppColoreando.Application.csproj src/AppColoreando.Application/
 COPY src/AppColoreando.Infrastructure/AppColoreando.Infrastructure.csproj src/AppColoreando.Infrastructure/
 COPY src/AppColoreando.Worker/AppColoreando.Worker.csproj src/AppColoreando.Worker/
-RUN --mount=type=cache,target=/root/.nuget/packages dotnet restore src/AppColoreando.Worker/AppColoreando.Worker.csproj
+RUN --mount=type=cache,id=appcoloreando-nuget,target=/root/.nuget/packages,sharing=locked dotnet restore src/AppColoreando.Worker/AppColoreando.Worker.csproj
 COPY . .
-RUN --mount=type=cache,target=/root/.nuget/packages dotnet publish src/AppColoreando.Worker/AppColoreando.Worker.csproj -c Release -o /app/publish --no-restore
+RUN --mount=type=cache,id=appcoloreando-nuget,target=/root/.nuget/packages,sharing=locked dotnet publish src/AppColoreando.Worker/AppColoreando.Worker.csproj -c Release -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
