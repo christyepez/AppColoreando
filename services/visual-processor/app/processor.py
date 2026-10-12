@@ -495,6 +495,25 @@ def _merge_micro_regions(labels: np.ndarray, centers: np.ndarray, options: Proce
     return result
 
 
+def _compact_labels_and_centers(labels: np.ndarray, centers: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    used = np.unique(labels.astype(np.int32))
+    if len(used) == len(centers) and np.array_equal(used, np.arange(len(centers), dtype=np.int32)):
+        return labels.astype(np.int32), centers
+    remap = np.full(len(centers), -1, dtype=np.int32)
+    compact_centers: list[np.ndarray] = []
+    for new_id, old_id in enumerate(used.tolist()):
+        if old_id < 0 or old_id >= len(centers):
+            continue
+        remap[old_id] = new_id
+        compact_centers.append(centers[old_id])
+    if not compact_centers:
+        raise ValueError("NO_ACTIVE_COLORS")
+    compact_labels = remap[labels.astype(np.int32)]
+    if np.any(compact_labels < 0):
+        raise ValueError("INVALID_COLOR_REMAP")
+    return compact_labels, np.asarray(compact_centers, dtype=np.uint8)
+
+
 def _minimum_palette_delta_e(centers: np.ndarray) -> float:
     if len(centers) < 2:
         return 0.0
@@ -727,6 +746,7 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
     labels, centers = _merge_similar_clusters(labels, centers, options.difficulty)
     labels = _edge_aware_smooth_labels(labels, lab, options.edge_sensitivity)
     labels = _merge_micro_regions(labels, centers, options)
+    labels, centers = _compact_labels_and_centers(labels, centers)
     palette = _vivid_palette(centers, options.saturation_boost, options.contrast_boost)
     palette = _harmonize_palette(palette)
     palette = _apply_art_palette(palette, resolved_art_style)
@@ -933,9 +953,9 @@ def _repair_options(base: ProcessorOptions, qa: dict) -> ProcessorOptions:
         simplification = min(0.78, simplification + 0.08)
     if "QA_PALETTE_DELTA" in issue_codes:
         max_colors = max(4, max_colors - 1)
-    if "QA_CONTOUR_COMPACTNESS" in issue_codes:
+    if "QA_CONTOUR_COMPLEXITY" in issue_codes:
         simplification = min(0.82, simplification + 0.06)
-    if "QA_LABEL_CRAMPED" in issue_codes:
+    if "QA_LABEL_CLEARANCE" in issue_codes:
         target_regions = max(12, round(target_regions * 0.88))
     if "QA_COVERAGE" in issue_codes:
         edge_sensitivity = max(0.15, edge_sensitivity - 0.08)
