@@ -580,3 +580,18 @@ def test_rebase_paths_moves_nested_processor_paths() -> None:
     assert rebased["bundlePath"] == str(new / "bundle.json")
     assert rebased["nested"][0] == str(new / "thumbnail.webp")
     assert rebased["nested"][1] == "unchanged"
+
+
+def test_qa_profiles_are_strict_for_kids_and_zoom_tolerant_for_master() -> None:
+    from app.processor import _qa_profile
+
+    kids = _qa_profile("Kids")
+    normal = _qa_profile("Normal")
+    master = _qa_profile("Master")
+
+    assert kids["minimum_delta"] > normal["minimum_delta"] > master["minimum_delta"]
+    assert kids["hidden_ratio"] < normal["hidden_ratio"] < master["hidden_ratio"]
+    assert kids["sliver_ratio"] < normal["sliver_ratio"] < master["sliver_ratio"]
+    assert kids["cramped_ratio"] < normal["cramped_ratio"] < master["cramped_ratio"]
+    assert master["minimum_delta"] == 2.5
+    assert master["hidden_ratio"] == 0.80
