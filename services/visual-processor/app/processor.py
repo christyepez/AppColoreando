@@ -981,6 +981,43 @@ def process_image(source_path: Path, output_dir: Path, options: ProcessorOptions
     }
 
 
+def _qa_profile(difficulty: str) -> dict[str, float]:
+    code = difficulty.strip().lower()
+    profiles = {
+        "kids": {
+            "minimum_delta": 8.0,
+            "hidden_ratio": 0.25,
+            "sliver_ratio": 0.03,
+            "cramped_ratio": 0.12,
+        },
+        "easy": {
+            "minimum_delta": 7.0,
+            "hidden_ratio": 0.35,
+            "sliver_ratio": 0.04,
+            "cramped_ratio": 0.18,
+        },
+        "normal": {
+            "minimum_delta": 6.0,
+            "hidden_ratio": 0.50,
+            "sliver_ratio": 0.05,
+            "cramped_ratio": 0.25,
+        },
+        "detailed": {
+            "minimum_delta": 4.0,
+            "hidden_ratio": 0.70,
+            "sliver_ratio": 0.10,
+            "cramped_ratio": 0.40,
+        },
+        "master": {
+            "minimum_delta": 2.5,
+            "hidden_ratio": 0.80,
+            "sliver_ratio": 0.15,
+            "cramped_ratio": 0.50,
+        },
+    }
+    return profiles.get(code, profiles["normal"])
+
+
 def _build_qa_report(regions, centers, shape, options, playable_area, image_area, semantic_counts):
     coverage = min(1.0, playable_area / max(1, image_area))
     minimum_delta = _minimum_palette_delta_e(centers)
@@ -997,29 +1034,58 @@ def _build_qa_report(regions, centers, shape, options, playable_area, image_area
     hidden_ratio = hidden_count / max(1, len(regions))
     sliver_ratio = sliver_count / max(1, len(regions))
     cramped_ratio = cramped_count / max(1, len(regions))
+    profile = _qa_profile(options.difficulty)
     issues = []
     score = 100
     if coverage < 0.98:
         score -= min(40, round((0.98 - coverage) * 200))
         issues.append({"severity": "Error", "code": "QA_COVERAGE", "message": f"Playable coverage is {coverage:.2%}."})
-    if minimum_delta < 6.0:
+    if minimum_delta < profile["minimum_delta"]:
         score -= 12
-        issues.append({"severity": "Warning", "code": "QA_PALETTE_DELTA", "message": f"Minimum palette Delta-E is {minimum_delta:.2f}."})
+        issues.append({
+            "severity": "Warning",
+            "code": "QA_PALETTE_DELTA",
+            "message": (
+                f"Minimum palette Delta-E is {minimum_delta:.2f}; "
+                f"{options.difficulty} target is {profile['minimum_delta']:.2f}."
+            ),
+        })
     if tiny_ratio > 0.15:
         score -= 12
         issues.append({"severity": "Warning", "code": "QA_MICRO_REGIONS", "message": f"Micro-region ratio is {tiny_ratio:.2%}."})
-    if hidden_ratio > 0.50:
+    if hidden_ratio > profile["hidden_ratio"]:
         score -= 8
-        issues.append({"severity": "Warning", "code": "QA_LABEL_READABILITY", "message": f"Hidden label ratio is {hidden_ratio:.2%}."})
-    if sliver_ratio > 0.05:
+        issues.append({
+            "severity": "Warning",
+            "code": "QA_LABEL_READABILITY",
+            "message": (
+                f"Hidden label ratio is {hidden_ratio:.2%}; "
+                f"{options.difficulty} target is <= {profile['hidden_ratio']:.0%}."
+            ),
+        })
+    if sliver_ratio > profile["sliver_ratio"]:
         score -= 10
-        issues.append({"severity": "Warning", "code": "QA_SLIVER_REGIONS", "message": f"Sliver-region ratio is {sliver_ratio:.2%}."})
+        issues.append({
+            "severity": "Warning",
+            "code": "QA_SLIVER_REGIONS",
+            "message": (
+                f"Sliver-region ratio is {sliver_ratio:.2%}; "
+                f"{options.difficulty} target is <= {profile['sliver_ratio']:.0%}."
+            ),
+        })
     if average_compactness < 0.18:
         score -= 8
         issues.append({"severity": "Warning", "code": "QA_CONTOUR_COMPLEXITY", "message": f"Average contour compactness is {average_compactness:.3f}."})
-    if cramped_ratio > 0.25:
+    if cramped_ratio > profile["cramped_ratio"]:
         score -= 8
-        issues.append({"severity": "Warning", "code": "QA_LABEL_CLEARANCE", "message": f"Cramped-label ratio is {cramped_ratio:.2%}."})
+        issues.append({
+            "severity": "Warning",
+            "code": "QA_LABEL_CLEARANCE",
+            "message": (
+                f"Cramped-label ratio is {cramped_ratio:.2%}; "
+                f"{options.difficulty} target is <= {profile['cramped_ratio']:.0%}."
+            ),
+        })
     if semantic_coverage < 0.90:
         score -= 6
         issues.append({"severity": "Info", "code": "QA_SEMANTIC_COVERAGE", "message": f"Semantic coverage is {semantic_coverage:.2%}."})
@@ -1035,6 +1101,8 @@ def _build_qa_report(regions, centers, shape, options, playable_area, image_area
         "sliverRegionRatio": round(sliver_ratio, 4), "averageContourCompactness": round(average_compactness, 4),
         "crampedLabelCount": cramped_count, "crampedLabelRatio": round(cramped_ratio, 4),
         "semanticCoverage": round(semantic_coverage, 4),
+        "qaProfile": options.difficulty,
+        "qaThresholds": profile,
     }
 
 
