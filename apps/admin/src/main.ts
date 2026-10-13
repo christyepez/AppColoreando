@@ -162,7 +162,7 @@ class DashboardComponent { readonly metrics = signal<Metrics | null>(null); cons
           <div class="artwork-thumb"><img *ngIf="a.thumbnailUrl" [src]="thumbnail(a)" [alt]="a.title" loading="lazy"><span *ngIf="!a.thumbnailUrl">Sin miniatura</span></div>
           <div class="artwork-meta">
             <strong>{{a.title}}</strong>
-            <span>{{categoryName(a.categoryId)}} · Dificultad {{a.difficulty}} · {{a.regionCount}} regiones</span>
+            <span>{{categoryLabel(a.categoryId)}} · Dificultad {{a.difficulty}} · {{a.regionCount}} regiones</span>
             <span>{{a.licenseType}} · {{a.publishingStatus}}</span>
             <a *ngIf="a.licenseReference" [href]="a.licenseReference" target="_blank" rel="noopener">Ver fuente/licencia</a>
           </div>
@@ -182,7 +182,7 @@ class ContentComponent {
   createCategory() { this.api.createCategory(this.categoryName, this.categorySlug).subscribe(() => this.reload()); }
   saveCountry() { this.api.upsertCountry(this.countryCode, this.countryName).subscribe(() => { this.countryCode = ''; this.countryName = ''; }); }
   thumbnail(a: Artwork) { if (!a.thumbnailUrl) return ''; if (/^https?:\/\//.test(a.thumbnailUrl)) return a.thumbnailUrl; const root = apiBase.replace(/\/api\/?$/, ''); return `${root}${a.thumbnailUrl.startsWith('/') ? '' : '/'}${a.thumbnailUrl}`; }
-  categoryName(categoryId: string) { return this.categories().find(c => c.id === categoryId)?.name ?? 'Sin categoría'; }
+  categoryLabel(categoryId: string) { return this.categories().find(c => c.id === categoryId)?.name ?? 'Sin categoría'; }
 }
 
 @Component({
