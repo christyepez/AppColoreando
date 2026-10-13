@@ -13,7 +13,7 @@ type UserDto = { id: string; email: string; displayName: string; role: string; i
 type Metrics = { users: number; publishedArtworks: number; completions: number; activityEvents: number };
 type Category = { id: string; name: string; slug: string; isActive: boolean };
 type Country = { id: string; code: string; name: string; isActive: boolean };
-type Artwork = { id: string; title: string; countryCode?: string; difficulty: number; regionCount: number; publishingStatus: string; thumbnailUrl?: string };
+type Artwork = { id: string; title: string; categoryId: string; countryCode?: string; difficulty: number; regionCount: number; publishingStatus: string; thumbnailUrl?: string; licenseType: string; licenseReference?: string };
 type Collection = { id: string; name: string; slug: string; description?: string; artworkCount: number; isActive: boolean };
 type Page<T> = { items: T[]; page: number; pageSize: number; total: number };
 
@@ -160,7 +160,12 @@ class DashboardComponent { readonly metrics = signal<Metrics | null>(null); cons
       <div class="artwork-grid">
         <article class="artwork-card" *ngFor="let a of artworks()">
           <div class="artwork-thumb"><img *ngIf="a.thumbnailUrl" [src]="thumbnail(a)" [alt]="a.title" loading="lazy"><span *ngIf="!a.thumbnailUrl">Sin miniatura</span></div>
-          <div class="artwork-meta"><strong>{{a.title}}</strong><span>Dificultad {{a.difficulty}} · {{a.regionCount}} regiones</span><span>{{a.publishingStatus}}</span></div>
+          <div class="artwork-meta">
+            <strong>{{a.title}}</strong>
+            <span>{{categoryLabel(a.categoryId)}} · Dificultad {{a.difficulty}} · {{a.regionCount}} regiones</span>
+            <span>{{a.licenseType}} · {{a.publishingStatus}}</span>
+            <a *ngIf="a.licenseReference" [href]="a.licenseReference" target="_blank" rel="noopener">Ver fuente/licencia</a>
+          </div>
         </article>
       </div>
     </section>
@@ -177,6 +182,7 @@ class ContentComponent {
   createCategory() { this.api.createCategory(this.categoryName, this.categorySlug).subscribe(() => this.reload()); }
   saveCountry() { this.api.upsertCountry(this.countryCode, this.countryName).subscribe(() => { this.countryCode = ''; this.countryName = ''; }); }
   thumbnail(a: Artwork) { if (!a.thumbnailUrl) return ''; if (/^https?:\/\//.test(a.thumbnailUrl)) return a.thumbnailUrl; const root = apiBase.replace(/\/api\/?$/, ''); return `${root}${a.thumbnailUrl.startsWith('/') ? '' : '/'}${a.thumbnailUrl}`; }
+  categoryLabel(categoryId: string) { return this.categories().find(c => c.id === categoryId)?.name ?? 'Sin categoría'; }
 }
 
 @Component({

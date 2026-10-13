@@ -74,7 +74,9 @@ public sealed record PublishGenerationRequest(
     string Title,
     Guid CategoryId,
     string? CountryCode,
-    string? Description = null);
+    string? Description = null,
+    string? LicenseType = null,
+    string? LicenseReference = null);
 
 public sealed record GenerationPublicationAssets(
     string BundlePath,
