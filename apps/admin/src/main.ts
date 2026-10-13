@@ -156,13 +156,41 @@ class DashboardComponent { readonly metrics = signal<Metrics | null>(null); cons
       <div class="panel"><h3>Colecciones</h3><table><tr *ngFor="let c of collections()"><td>{{c.name}}</td><td>{{c.artworkCount}} imágenes</td><td>{{c.isActive ? 'Activa' : 'Inactiva'}}</td></tr></table></div>
     </section>
     <section class="panel content-artworks">
-      <div class="section-title"><div><span class="eyebrow">CATÁLOGO PUBLICADO</span><h3>Imágenes listas para colorear</h3></div><span class="status-pill">{{artworks().length}} elementos</span></div>
+      <div class="section-title"><div><span class="eyebrow">CATÁLOGO PUBLICADO</span><h3>Imágenes listas para colorear</h3></div><span class="status-pill">{{filteredArtworks().length}} / {{artworks().length}} elementos</span></div>
+      <div class="catalog-summary">
+        <span>Kids <strong>{{difficultyCount(1)}}</strong></span>
+        <span>Normal <strong>{{difficultyCount(3)}}</strong></span>
+        <span>Master <strong>{{difficultyCount(5)}}</strong></span>
+        <span>CC0 / PD <strong>{{licensedCount()}}</strong></span>
+      </div>
+      <div class="catalog-filters">
+        <input [(ngModel)]="searchText" placeholder="Buscar título">
+        <select [(ngModel)]="filterCategoryId">
+          <option value="">Todas las categorías</option>
+          <option *ngFor="let c of categories()" [value]="c.id">{{c.name}}</option>
+        </select>
+        <select [(ngModel)]="filterDifficulty">
+          <option value="">Todos los niveles</option>
+          <option value="1">Kids</option>
+          <option value="2">Easy</option>
+          <option value="3">Normal</option>
+          <option value="4">Detailed</option>
+          <option value="5">Master</option>
+        </select>
+        <select [(ngModel)]="filterLicense">
+          <option value="">Todas las licencias</option>
+          <option value="CC0">CC0</option>
+          <option value="PublicDomain">Public Domain</option>
+          <option value="Original">Original</option>
+        </select>
+        <button class="ghost" (click)="clearFilters()">Limpiar filtros</button>
+      </div>
       <div class="artwork-grid">
-        <article class="artwork-card" *ngFor="let a of artworks()">
+        <article class="artwork-card" *ngFor="let a of filteredArtworks()">
           <div class="artwork-thumb"><img *ngIf="a.thumbnailUrl" [src]="thumbnail(a)" [alt]="a.title" loading="lazy"><span *ngIf="!a.thumbnailUrl">Sin miniatura</span></div>
           <div class="artwork-meta">
             <strong>{{a.title}}</strong>
-            <span>{{categoryLabel(a.categoryId)}} · Dificultad {{a.difficulty}} · {{a.regionCount}} regiones</span>
+            <span>{{categoryLabel(a.categoryId)}} · {{difficultyLabel(a.difficulty)}} · {{a.regionCount}} regiones</span>
             <span>{{a.licenseType}} · {{a.publishingStatus}}</span>
             <a *ngIf="a.licenseReference" [href]="a.licenseReference" target="_blank" rel="noopener">Ver fuente/licencia</a>
           </div>
@@ -177,12 +205,27 @@ class ContentComponent {
   readonly collections = signal<Collection[]>([]);
   readonly artworks = signal<Artwork[]>([]);
   categoryName = ''; categorySlug = ''; countryCode = ''; countryName = '';
+  searchText = ''; filterCategoryId = ''; filterDifficulty = ''; filterLicense = '';
   constructor() { this.reload(); }
   reload() { this.api.categories().subscribe(x => this.categories.set(x)); this.api.collections().subscribe(x => this.collections.set(x)); this.api.artworks().subscribe(x => this.artworks.set(x.items)); }
   createCategory() { this.api.createCategory(this.categoryName, this.categorySlug).subscribe(() => this.reload()); }
   saveCountry() { this.api.upsertCountry(this.countryCode, this.countryName).subscribe(() => { this.countryCode = ''; this.countryName = ''; }); }
   thumbnail(a: Artwork) { if (!a.thumbnailUrl) return ''; if (/^https?:\/\//.test(a.thumbnailUrl)) return a.thumbnailUrl; const root = apiBase.replace(/\/api\/?$/, ''); return `${root}${a.thumbnailUrl.startsWith('/') ? '' : '/'}${a.thumbnailUrl}`; }
   categoryLabel(categoryId: string) { return this.categories().find(c => c.id === categoryId)?.name ?? 'Sin categoría'; }
+  difficultyLabel(value: number) { return ({ 1: 'Kids', 2: 'Easy', 3: 'Normal', 4: 'Detailed', 5: 'Master' } as Record<number, string>)[value] ?? `Nivel ${value}`; }
+  filteredArtworks() {
+    const search = this.searchText.trim().toLowerCase();
+    const difficulty = this.filterDifficulty ? Number(this.filterDifficulty) : null;
+    return this.artworks().filter(a =>
+      (!search || a.title.toLowerCase().includes(search)) &&
+      (!this.filterCategoryId || a.categoryId === this.filterCategoryId) &&
+      (difficulty === null || a.difficulty === difficulty) &&
+      (!this.filterLicense || a.licenseType === this.filterLicense)
+    );
+  }
+  difficultyCount(value: number) { return this.artworks().filter(a => a.difficulty === value).length; }
+  licensedCount() { return this.artworks().filter(a => a.licenseType === 'CC0' || a.licenseType === 'PublicDomain').length; }
+  clearFilters() { this.searchText = ''; this.filterCategoryId = ''; this.filterDifficulty = ''; this.filterLicense = ''; }
 }
 
 @Component({
