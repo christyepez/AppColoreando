@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 from app.processor import ProcessorOptions, process_image, process_image_auto_repair, process_variants
 
-app = FastAPI(title="AppColoreando Visual Processor", version="0.17.0")
+app = FastAPI(title="AppColoreando Visual Processor", version="0.18.0")
 OUTPUT_ROOT = Path("/content-data/generation-jobs")
 
 
@@ -31,7 +31,7 @@ class ProcessRequest(BaseModel):
     curveSmoothness: float
     saturationBoost: float
     contrastBoost: float
-    generateVariants: bool = True
+    generateVariants: bool = False
     artStyle: str = Field(default="auto", min_length=1, max_length=32)
     semanticHints: list[SemanticHint] = Field(default_factory=list)
 THEME_PRESET_CODES = {
@@ -49,7 +49,7 @@ def _resolve_request_art_style(preset_code: str, requested: str) -> str:
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "healthy", "engine": "s65-photo-adaptive-engine"}
+    return {"status": "healthy", "engine": "s68-photo-adaptive-engine"}
 
 
 @app.post("/process")

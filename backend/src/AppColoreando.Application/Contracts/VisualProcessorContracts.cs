@@ -12,7 +12,7 @@ public sealed record VisualProcessorRequest(
     double CurveSmoothness,
     double SaturationBoost,
     double ContrastBoost,
-    bool GenerateVariants = true);
+    bool GenerateVariants = false);
 
 public sealed record VisualProcessorResult(
     bool Success,

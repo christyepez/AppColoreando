@@ -516,3 +516,22 @@ def test_theme_preset_code_selects_art_style() -> None:
         assert _resolve_request_art_style(code, "auto") == code
     assert _resolve_request_art_style("natural", "auto") == "auto"
     assert _resolve_request_art_style("space", "portrait") == "portrait"
+
+
+def test_process_request_defaults_to_single_variant() -> None:
+    from app.main import ProcessRequest
+
+    request = ProcessRequest(
+        jobId="00000000-0000-0000-0000-000000000001",
+        sourcePath="/tmp/source.png",
+        presetCode="animals",
+        difficulty="Normal",
+        targetRegions=650,
+        maxColors=72,
+        simplificationTolerance=0.30,
+        edgeSensitivity=0.66,
+        curveSmoothness=0.84,
+        saturationBoost=0.18,
+        contrastBoost=0.12,
+    )
+    assert request.generateVariants is False
