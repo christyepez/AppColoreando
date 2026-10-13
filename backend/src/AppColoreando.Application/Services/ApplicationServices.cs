@@ -506,8 +506,42 @@ public sealed class AdminService(
         e.PublishedAtUtc = r.PublishingStatus == PublishingStatus.Published ? e.PublishedAtUtc ?? DateTime.UtcNow : null;
         e.UpdatedAtUtc = DateTime.UtcNow;
         e.UpdatedByUserId = userId;
-        e.Assets.Clear();
-        foreach (var asset in r.Assets) e.Assets.Add(new ArtworkAsset { ArtworkId = e.Id, Kind = asset.Kind, Uri = asset.Uri, ContentType = asset.ContentType, Checksum = asset.Checksum, SizeBytes = asset.SizeBytes, IsPrimary = asset.IsPrimary });
+        var requestedKeys = r.Assets
+            .Select(asset => (asset.Kind, asset.Uri))
+            .ToHashSet();
+        foreach (var existing in e.Assets
+                     .Where(asset => !requestedKeys.Contains((asset.Kind, asset.Uri)))
+                     .ToArray())
+        {
+            e.Assets.Remove(existing);
+        }
+
+        foreach (var asset in r.Assets)
+        {
+            var existing = e.Assets.FirstOrDefault(x => x.Kind == asset.Kind && x.Uri == asset.Uri);
+            if (existing is null)
+            {
+                e.Assets.Add(new ArtworkAsset
+                {
+                    ArtworkId = e.Id,
+                    Kind = asset.Kind,
+                    Uri = asset.Uri,
+                    ContentType = asset.ContentType,
+                    Checksum = asset.Checksum,
+                    SizeBytes = asset.SizeBytes,
+                    IsPrimary = asset.IsPrimary,
+                    CreatedByUserId = userId
+                });
+                continue;
+            }
+
+            existing.ContentType = asset.ContentType;
+            existing.Checksum = asset.Checksum;
+            existing.SizeBytes = asset.SizeBytes;
+            existing.IsPrimary = asset.IsPrimary;
+            existing.UpdatedAtUtc = DateTime.UtcNow;
+            existing.UpdatedByUserId = userId;
+        }
     }
 
     private static void ValidateArtwork(UpsertArtworkRequest r)

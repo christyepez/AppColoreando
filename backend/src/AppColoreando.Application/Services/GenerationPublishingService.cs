@@ -48,6 +48,7 @@ public sealed class GenerationPublishingService(
             Description = string.IsNullOrWhiteSpace(request.Description) ? null : request.Description.Trim(),
             CategoryId = request.CategoryId,
             CountryCode = string.IsNullOrWhiteSpace(request.CountryCode) ? null : request.CountryCode.Trim().ToUpperInvariant(),
+            LicenseAgreementId = request.LicenseAgreementId,
             LicenseType = string.IsNullOrWhiteSpace(request.LicenseType) ? "Original" : request.LicenseType.Trim(),
             LicenseReference = string.IsNullOrWhiteSpace(request.LicenseReference) ? null : request.LicenseReference.Trim(),
             ThumbnailUrl = thumbnailUrl,

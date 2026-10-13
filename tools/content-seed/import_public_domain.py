@@ -174,38 +174,6 @@ def wait_for_preview(base: str, token: str, job_id: str, timeout_minutes: int):
     raise TimeoutError(f"job {job_id} did not reach PreviewReady in {timeout_minutes} minutes")
 
 
-def update_artwork_license(base: str, token: str, artwork: dict, item: dict, license_record: dict):
-    source_page, _ = commons_urls(item["commonsFile"])
-    payload = {
-        "title": artwork["title"],
-        "description": artwork.get("description"),
-        "categoryId": artwork["categoryId"],
-        "countryCode": artwork.get("countryCode"),
-        "brandId": artwork.get("brandId"),
-        "licenseAgreementId": license_record["id"],
-        "licenseType": item["licenseCode"],
-        "licenseReference": source_page,
-        "thumbnailUrl": artwork.get("thumbnailUrl"),
-        "assetUrl": artwork.get("assetUrl"),
-        "bundleChecksum": artwork.get("bundleChecksum"),
-        "difficulty": artwork["difficulty"],
-        "regionCount": artwork["regionCount"],
-        "publishingStatus": artwork["publishingStatus"],
-        "scheduledPublishAtUtc": artwork.get("scheduledPublishAtUtc"),
-        "assets": [
-            {
-                "kind": asset["kind"],
-                "uri": asset["uri"],
-                "contentType": asset["contentType"],
-                "checksum": asset.get("checksum"),
-                "sizeBytes": asset["sizeBytes"],
-                "isPrimary": asset["isPrimary"],
-            }
-            for asset in artwork.get("assets", [])
-        ],
-    }
-    return json_request(base, "PUT", f"/api/admin/artworks/{artwork['id']}", token, payload)
-
 
 def ensure_collection(base: str, token: str, item: dict, artwork_ids: list[str], existing_collections: dict[str, dict]):
     slug = item["collectionSlug"]
@@ -336,8 +304,8 @@ def main():
                 ),
                 "licenseType": item["licenseCode"],
                 "licenseReference": source_page,
+                "licenseAgreementId": license_record["id"],
             })
-            artwork = update_artwork_license(args.api, token, artwork, item, license_record)
             published_by_collection.setdefault(item["collectionSlug"], []).append(artwork["id"])
             existing_titles[title] = artwork
             print(
