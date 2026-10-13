@@ -4,9 +4,9 @@ from uuid import UUID
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
-from app.processor import ProcessorOptions, process_image, process_image_auto_repair, process_variants
+from app.processor import ProcessorOptions, _variant_options, process_image, process_image_auto_repair, process_variants
 
-app = FastAPI(title="AppColoreando Visual Processor", version="0.20.0")
+app = FastAPI(title="AppColoreando Visual Processor", version="0.21.0")
 OUTPUT_ROOT = Path("/content-data/generation-jobs")
 
 
@@ -49,7 +49,7 @@ def _resolve_request_art_style(preset_code: str, requested: str) -> str:
 
 @app.get("/health")
 def health() -> dict[str, str]:
-    return {"status": "healthy", "engine": "s73-photo-adaptive-engine"}
+    return {"status": "healthy", "engine": "s74-photo-adaptive-engine"}
 
 
 @app.post("/process")
@@ -82,7 +82,11 @@ def process(request: ProcessRequest) -> dict:
         result = (
             process_variants(source, job_output, options, request.difficulty)
             if request.generateVariants
-            else process_image_auto_repair(source, job_output, options)
+            else process_image_auto_repair(
+                source,
+                job_output,
+                _variant_options(options, request.difficulty),
+            )
         )
         return {
             "success": True,
