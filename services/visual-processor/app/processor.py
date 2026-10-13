@@ -1071,39 +1071,115 @@ def _repair_options(base: ProcessorOptions, qa: dict) -> ProcessorOptions:
     simplification = base.simplification_tolerance
     edge_sensitivity = base.edge_sensitivity
     if "QA_MICRO_REGIONS" in issue_codes or "QA_SLIVER_REGIONS" in issue_codes:
-        target_regions = max(12, round(target_regions * 0.82))
-        simplification = min(0.78, simplification + 0.08)
+        target_regions = max(12, round(target_regions * 0.78))
+        simplification = min(0.82, simplification + 0.10)
     if "QA_PALETTE_DELTA" in issue_codes:
-        max_colors = max(4, max_colors - 1)
+        max_colors = max(4, round(max_colors * 0.82))
+    if "QA_LABEL_READABILITY" in issue_codes:
+        target_regions = max(12, round(target_regions * 0.78))
+        simplification = min(0.82, simplification + 0.12)
     if "QA_CONTOUR_COMPLEXITY" in issue_codes:
         simplification = min(0.82, simplification + 0.06)
     if "QA_LABEL_CLEARANCE" in issue_codes:
-        target_regions = max(12, round(target_regions * 0.88))
+        target_regions = max(12, round(target_regions * 0.80))
     if "QA_COVERAGE" in issue_codes:
         edge_sensitivity = max(0.15, edge_sensitivity - 0.08)
     return ProcessorOptions(target_regions=target_regions, max_colors=max_colors, simplification_tolerance=simplification, edge_sensitivity=edge_sensitivity, curve_smoothness=base.curve_smoothness, saturation_boost=base.saturation_boost, contrast_boost=base.contrast_boost, difficulty=base.difficulty, style_code=base.style_code, art_style=base.art_style, semantic_hints=base.semantic_hints)
 
 
+def _rebase_paths(value, old_root: Path, new_root: Path):
+    old_prefix = str(old_root)
+    if isinstance(value, str) and value.startswith(old_prefix):
+        return str(new_root / Path(value).relative_to(old_root))
+    if isinstance(value, dict):
+        return {key: _rebase_paths(item, old_root, new_root) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_rebase_paths(item, old_root, new_root) for item in value]
+    return value
+
+
+def _rewrite_manifest_paths(manifest_path: Path, old_root: Path, new_root: Path) -> None:
+    payload = json.loads(manifest_path.read_text(encoding="utf-8"))
+    payload = _rebase_paths(payload, old_root, new_root)
+    manifest_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
 def process_image_auto_repair(source_path: Path, output_dir: Path, options: ProcessorOptions) -> dict:
     baseline = process_image(source_path, output_dir, options)
     baseline_qa = baseline.get("qa", {})
+    baseline_score = int(baseline_qa.get("score", 0))
     if bool(baseline_qa.get("publishable", False)):
-        baseline["autoRepair"] = {"attempted": False, "accepted": False, "baselineScore": baseline_qa.get("score", 0), "finalScore": baseline_qa.get("score", 0)}
+        baseline["autoRepair"] = {
+            "attempted": False,
+            "accepted": False,
+            "baselineScore": baseline_score,
+            "finalScore": baseline_score,
+        }
         return baseline
-    repair_dir = output_dir.parent / f"{output_dir.name}-repair-candidate"
-    if repair_dir.exists():
-        shutil.rmtree(repair_dir)
-    repaired = process_image(source_path, repair_dir, _repair_options(options, baseline_qa))
-    baseline_score = int(baseline_qa.get("score", 0)); repaired_score = int(repaired.get("qa", {}).get("score", 0))
-    if repaired_score > baseline_score:
-        if output_dir.exists(): shutil.rmtree(output_dir)
-        shutil.move(str(repair_dir), str(output_dir))
-        repaired["manifestPath"] = str(output_dir / "manifest.json")
-        repaired["autoRepair"] = {"attempted": True, "accepted": True, "baselineScore": baseline_score, "finalScore": repaired_score}
-        return repaired
-    shutil.rmtree(repair_dir, ignore_errors=True)
-    baseline["autoRepair"] = {"attempted": True, "accepted": False, "baselineScore": baseline_score, "finalScore": baseline_score}
-    return baseline
+
+    best_result = baseline
+    best_score = baseline_score
+    best_dir: Path | None = None
+    current_options = options
+    candidate_dirs: list[Path] = []
+
+    for attempt in range(1, 4):
+        repair_dir = output_dir.parent / f"{output_dir.name}-repair-candidate-{attempt}"
+        candidate_dirs.append(repair_dir)
+        if repair_dir.exists():
+            shutil.rmtree(repair_dir)
+        current_options = _repair_options(current_options, best_result.get("qa", {}))
+        candidate = process_image(source_path, repair_dir, current_options)
+        candidate_qa = candidate.get("qa", {})
+        candidate_score = int(candidate_qa.get("score", 0))
+
+        if candidate_score > best_score:
+            best_result = candidate
+            best_score = candidate_score
+            best_dir = repair_dir
+
+        if bool(candidate_qa.get("publishable", False)) and candidate_score >= 90:
+            best_result = candidate
+            best_score = candidate_score
+            best_dir = repair_dir
+            break
+
+    accepted = (
+        best_dir is not None
+        and bool(best_result.get("qa", {}).get("publishable", False))
+        and best_score >= 90
+    )
+    if not accepted:
+        for candidate_dir in candidate_dirs:
+            shutil.rmtree(candidate_dir, ignore_errors=True)
+        baseline["autoRepair"] = {
+            "attempted": True,
+            "accepted": False,
+            "baselineScore": baseline_score,
+            "bestCandidateScore": best_score,
+            "finalScore": baseline_score,
+        }
+        return baseline
+
+    for candidate_dir in candidate_dirs:
+        if candidate_dir != best_dir:
+            shutil.rmtree(candidate_dir, ignore_errors=True)
+
+    if output_dir.exists():
+        shutil.rmtree(output_dir)
+    old_root = best_dir
+    shutil.move(str(best_dir), str(output_dir))
+    manifest_path = output_dir / "manifest.json"
+    _rewrite_manifest_paths(manifest_path, old_root, output_dir)
+    best_result = _rebase_paths(best_result, old_root, output_dir)
+    best_result["manifestPath"] = str(manifest_path)
+    best_result["autoRepair"] = {
+        "attempted": True,
+        "accepted": True,
+        "baselineScore": baseline_score,
+        "finalScore": best_score,
+    }
+    return best_result
 def process_variants(
     source_path: Path,
     output_dir: Path,

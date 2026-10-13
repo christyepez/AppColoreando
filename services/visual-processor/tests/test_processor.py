@@ -535,3 +535,48 @@ def test_process_request_defaults_to_single_variant() -> None:
         contrastBoost=0.12,
     )
     assert request.generateVariants is False
+
+
+def test_repair_options_reduce_master_complexity_for_quality_issues() -> None:
+    from app.processor import ProcessorOptions, _repair_options
+
+    base = ProcessorOptions(
+        target_regions=650,
+        max_colors=72,
+        simplification_tolerance=0.30,
+        edge_sensitivity=0.66,
+        curve_smoothness=0.84,
+        saturation_boost=0.18,
+        contrast_boost=0.12,
+        difficulty="Master",
+        style_code="animals",
+        art_style="animals",
+        semantic_hints=(),
+    )
+    qa = {
+        "issues": [
+            {"code": "QA_PALETTE_DELTA"},
+            {"code": "QA_LABEL_READABILITY"},
+            {"code": "QA_SLIVER_REGIONS"},
+        ]
+    }
+    repaired = _repair_options(base, qa)
+    assert repaired.target_regions < 400
+    assert repaired.max_colors < base.max_colors
+    assert repaired.simplification_tolerance > base.simplification_tolerance
+
+
+def test_rebase_paths_moves_nested_processor_paths() -> None:
+    from pathlib import Path
+    from app.processor import _rebase_paths
+
+    old = Path("/tmp/job-repair-candidate-1")
+    new = Path("/tmp/job")
+    payload = {
+        "bundlePath": str(old / "bundle.json"),
+        "nested": [str(old / "thumbnail.webp"), "unchanged"],
+    }
+    rebased = _rebase_paths(payload, old, new)
+    assert rebased["bundlePath"] == str(new / "bundle.json")
+    assert rebased["nested"][0] == str(new / "thumbnail.webp")
+    assert rebased["nested"][1] == "unchanged"
