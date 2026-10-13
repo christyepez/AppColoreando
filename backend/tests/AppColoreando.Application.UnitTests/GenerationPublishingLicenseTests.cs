@@ -27,6 +27,7 @@ public sealed class GenerationPublishingLicenseTests
             new FakeAuditRepository(),
             new FakeUnitOfWork());
 
+        var licenseAgreementId = Guid.NewGuid();
         await sut.PublishAsync(
             Guid.NewGuid(),
             job.Id,
@@ -36,11 +37,13 @@ public sealed class GenerationPublishingLicenseTests
                 "EC",
                 "source",
                 "CC0",
-                "https://commons.wikimedia.org/wiki/File:Example.jpg"),
+                "https://commons.wikimedia.org/wiki/File:Example.jpg",
+                licenseAgreementId),
             CancellationToken.None);
 
         Assert.NotNull(artworkRepository.Added);
-        Assert.Equal("CC0", artworkRepository.Added!.LicenseType);
+        Assert.Equal(licenseAgreementId, artworkRepository.Added!.LicenseAgreementId);
+        Assert.Equal("CC0", artworkRepository.Added.LicenseType);
         Assert.Equal("https://commons.wikimedia.org/wiki/File:Example.jpg", artworkRepository.Added.LicenseReference);
     }
 
