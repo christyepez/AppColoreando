@@ -595,3 +595,33 @@ def test_qa_profiles_are_strict_for_kids_and_zoom_tolerant_for_master() -> None:
     assert kids["cramped_ratio"] < normal["cramped_ratio"] < master["cramped_ratio"]
     assert master["minimum_delta"] == 2.5
     assert master["hidden_ratio"] == 0.80
+
+
+def test_single_variant_difficulty_scaling_preserves_age_profiles() -> None:
+    from app.processor import ProcessorOptions, _variant_options
+
+    base = ProcessorOptions(
+        target_regions=780,
+        max_colors=88,
+        simplification_tolerance=0.28,
+        edge_sensitivity=0.68,
+        curve_smoothness=0.82,
+        saturation_boost=0.25,
+        contrast_boost=0.16,
+        difficulty="Normal",
+        style_code="underwater",
+        art_style="underwater",
+        semantic_hints=(),
+    )
+    kids = _variant_options(base, "Kids")
+    normal = _variant_options(base, "Normal")
+    master = _variant_options(base, "Master")
+
+    assert kids.target_regions == 273
+    assert kids.max_colors == 31
+    assert kids.simplification_tolerance >= 0.68
+    assert normal.target_regions == 780
+    assert normal.max_colors == 88
+    assert master.target_regions == 1950
+    assert master.max_colors == 132
+    assert master.simplification_tolerance <= 0.22
