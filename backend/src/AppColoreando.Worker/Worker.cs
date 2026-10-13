@@ -17,10 +17,50 @@ public sealed class Worker(
         {
             HostName = configuration["RabbitMQ:Host"] ?? "localhost",
             UserName = configuration["RabbitMQ:User"] ?? throw new InvalidOperationException("RabbitMQ:User is required."),
-            Password = configuration["RabbitMQ:Password"] ?? throw new InvalidOperationException("RabbitMQ:Password is required.")
+            Password = configuration["RabbitMQ:Password"] ?? throw new InvalidOperationException("RabbitMQ:Password is required."),
+            AutomaticRecoveryEnabled = true,
+            NetworkRecoveryInterval = TimeSpan.FromSeconds(5)
         };
         var queueName = configuration["RabbitMQ:GenerationQueue"] ?? "artwork.generation.requested";
+        var retryDelay = TimeSpan.FromSeconds(1);
 
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await ConsumeAsync(factory, queueName, stoppingToken);
+                retryDelay = TimeSpan.FromSeconds(1);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(
+                    ex,
+                    "RabbitMQ consumer unavailable. Retrying in {RetrySeconds}s.",
+                    retryDelay.TotalSeconds);
+
+                try
+                {
+                    await Task.Delay(retryDelay, stoppingToken);
+                }
+                catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                retryDelay = TimeSpan.FromSeconds(Math.Min(retryDelay.TotalSeconds * 2, 30));
+            }
+        }
+    }
+
+    private async Task ConsumeAsync(
+        ConnectionFactory factory,
+        string queueName,
+        CancellationToken stoppingToken)
+    {
         await using var connection = await factory.CreateConnectionAsync(stoppingToken);
         await using var channel = await connection.CreateChannelAsync(cancellationToken: stoppingToken);
         await channel.QueueDeclareAsync(queueName, true, false, false, null, cancellationToken: stoppingToken);
