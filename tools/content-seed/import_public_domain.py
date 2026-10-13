@@ -15,6 +15,11 @@ from urllib.request import Request, urlopen
 STATUS_PREVIEW_READY = 3
 STATUS_FAILED = 7
 STATUS_CANCELLED = 8
+DIFFICULTY_VARIANTS = {
+    "Kids": 0,
+    "Normal": 2,
+    "Master": 4,
+}
 
 
 def json_request(base: str, method: str, path: str, token: str | None = None, payload=None):
@@ -241,6 +246,13 @@ def main():
     parser.add_argument("--source-root", default="content-seed/public-domain")
     parser.add_argument("--timeout-minutes", type=int, default=25)
     parser.add_argument("--limit", type=int, default=0, help="0 imports all items.")
+    parser.add_argument(
+        "--difficulties",
+        nargs="+",
+        choices=tuple(DIFFICULTY_VARIANTS),
+        default=["Kids", "Normal", "Master"],
+        help="Publish one artwork per requested age/complexity track.",
+    )
     args = parser.parse_args()
 
     global MANIFEST_ITEMS
@@ -274,12 +286,6 @@ def main():
 
     for index, item in enumerate(items, 1):
         print(f"[{index}/{len(items)}] {item['categoryName']} / {item['title']}", flush=True)
-        if item["title"] in existing_titles:
-            artwork = existing_titles[item["title"]]
-            published_by_collection.setdefault(item["collectionSlug"], []).append(artwork["id"])
-            print("  already published; reusing existing artwork", flush=True)
-            continue
-
         category = categories.get(item["categorySlug"]) or ensure_category(
             args.api, token, item, categories
         )
@@ -294,43 +300,63 @@ def main():
         source = multipart_upload(
             args.api, "/api/admin/content-generation/source-assets", local_file, token
         )
-        job = json_request(args.api, "POST", "/api/admin/content-generation/jobs", token, {
-            "sourceAssetId": source["id"],
-            "stylePresetId": preset["id"],
-            "difficulty": item["difficulty"],
-        })
-        wait_for_preview(args.api, token, job["id"], args.timeout_minutes)
-
-        note = {
-            "note": (
-                f"Starter collection import. Source: Wikimedia Commons; "
-                f"author={item['author']}; license={item['licenseCode']}."
-            )
-        }
-        json_request(args.api, "POST", f"/api/admin/content-generation/jobs/{job['id']}/submit-review", token, note)
-        json_request(args.api, "POST", f"/api/admin/content-generation/jobs/{job['id']}/approve", token, note)
-
         source_page, _ = commons_urls(item["commonsFile"])
-        artwork = json_request(args.api, "POST", f"/api/admin/content-generation/jobs/{job['id']}/publish", token, {
-            "title": item["title"],
-            "categoryId": category["id"],
-            "countryCode": None,
-            "description": (
-                f"Fuente: Wikimedia Commons. Autor: {item['author']}. "
-                f"Licencia: {item['licenseCode']}. {source_page}"
-            ),
-        })
-        artwork = update_artwork_license(args.api, token, artwork, item, license_record)
-        published_by_collection.setdefault(item["collectionSlug"], []).append(artwork["id"])
-        existing_titles[item["title"]] = artwork
-        print(f"  published: artwork={artwork['id']} regions={artwork['regionCount']}", flush=True)
+
+        for difficulty_name in args.difficulties:
+            title = f"{item['title']} · {difficulty_name}"
+            if title in existing_titles:
+                artwork = existing_titles[title]
+                published_by_collection.setdefault(item["collectionSlug"], []).append(artwork["id"])
+                print(f"  already published: {title}", flush=True)
+                continue
+
+            job = json_request(args.api, "POST", "/api/admin/content-generation/jobs", token, {
+                "sourceAssetId": source["id"],
+                "stylePresetId": preset["id"],
+                "difficulty": DIFFICULTY_VARIANTS[difficulty_name],
+            })
+            wait_for_preview(args.api, token, job["id"], args.timeout_minutes)
+
+            note = {
+                "note": (
+                    f"Starter collection import ({difficulty_name}). Source: Wikimedia Commons; "
+                    f"author={item['author']}; license={item['licenseCode']}."
+                )
+            }
+            json_request(args.api, "POST", f"/api/admin/content-generation/jobs/{job['id']}/submit-review", token, note)
+            json_request(args.api, "POST", f"/api/admin/content-generation/jobs/{job['id']}/approve", token, note)
+
+            artwork = json_request(args.api, "POST", f"/api/admin/content-generation/jobs/{job['id']}/publish", token, {
+                "title": title,
+                "categoryId": category["id"],
+                "countryCode": None,
+                "description": (
+                    f"Fuente: Wikimedia Commons. Autor: {item['author']}. "
+                    f"Licencia: {item['licenseCode']}. Nivel: {difficulty_name}. {source_page}"
+                ),
+                "licenseType": item["licenseCode"],
+                "licenseReference": source_page,
+            })
+            artwork = update_artwork_license(args.api, token, artwork, item, license_record)
+            published_by_collection.setdefault(item["collectionSlug"], []).append(artwork["id"])
+            existing_titles[title] = artwork
+            print(
+                f"  published {difficulty_name}: artwork={artwork['id']} "
+                f"regions={artwork['regionCount']}",
+                flush=True,
+            )
 
     by_slug = {item["collectionSlug"]: item for item in items}
     for slug, ids in published_by_collection.items():
         ensure_collection(args.api, token, by_slug[slug], ids, collections)
         print(f"collection {slug}: {len(ids)} imported artwork(s)", flush=True)
 
-    print(f"DONE: {sum(len(v) for v in published_by_collection.values())} artwork(s) linked to collections.", flush=True)
+    print(
+        f"DONE: {sum(len(v) for v in published_by_collection.values())} "
+        f"artwork link(s) across {len(published_by_collection)} collections; "
+        f"tracks={','.join(args.difficulties)}.",
+        flush=True,
+    )
 
 
 MANIFEST_ITEMS = []
