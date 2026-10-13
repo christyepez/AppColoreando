@@ -76,7 +76,8 @@ public sealed record PublishGenerationRequest(
     string? CountryCode,
     string? Description = null,
     string? LicenseType = null,
-    string? LicenseReference = null);
+    string? LicenseReference = null,
+    Guid? LicenseAgreementId = null);
 
 public sealed record GenerationPublicationAssets(
     string BundlePath,
